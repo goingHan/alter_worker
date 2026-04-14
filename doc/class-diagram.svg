@@ -1,0 +1,174 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 960 800" width="960" height="800">
+  <style>
+    text { font-family: "Helvetica Neue", Helvetica, Arial, "PingFang SC", "Microsoft YaHei", sans-serif; }
+    .class-name { font-size: 13px; font-weight: 600; }
+    .member { font-size: 11px; }
+    .stereotype { font-size: 11px; font-style: italic; }
+  </style>
+  <defs>
+    <marker id="arrow-inherit" markerWidth="12" markerHeight="10" refX="11" refY="5" orient="auto">
+      <polygon points="0 0, 12 5, 0 10" fill="none" stroke="#4b5563" stroke-width="1.5"/>
+    </marker>
+    <marker id="arrow-assoc" markerWidth="10" markerHeight="7" refX="9" refY="3.5" orient="auto">
+      <polygon points="0 0, 10 3.5, 0 7" fill="#4b5563"/>
+    </marker>
+  </defs>
+  <rect width="960" height="800" fill="#ffffff"/>
+  <text x="480" y="30" text-anchor="middle" font-size="18" font-weight="600" fill="#111827">AlertWorker Domain Model (Class Diagram)</text>
+
+  <!-- Helper: class box -->
+  <!-- MessageChannel -->
+  <rect x="60" y="60" width="160" height="70" fill="#ffffff" stroke="#d1d5db" stroke-width="1.5"/>
+  <line x1="60" y1="86" x2="220" y2="86" stroke="#d1d5db" stroke-width="1"/>
+  <line x1="60" y1="102" x2="220" y2="102" stroke="#d1d5db" stroke-width="1"/>
+  <text x="140" y="79" text-anchor="middle" class="class-name" font-style="italic" fill="#111827">MessageChannel</text>
+  <text x="68" y="97" class="member" fill="#374151">+ name: String</text>
+  <text x="68" y="113" class="member" fill="#374151">+ send(message): boolean</text>
+
+  <!-- DingDingChannel -->
+  <rect x="20" y="220" width="160" height="100" fill="#ffffff" stroke="#d1d5db" stroke-width="1.5"/>
+  <line x1="20" y1="246" x2="180" y2="246" stroke="#d1d5db" stroke-width="1"/>
+  <line x1="20" y1="262" x2="180" y2="262" stroke="#d1d5db" stroke-width="1"/>
+  <text x="100" y="239" text-anchor="middle" class="class-name" fill="#111827">DingDingChannel</text>
+  <text x="28" y="257" class="member" fill="#374151">+ webhookUrl: String</text>
+  <text x="28" y="273" class="member" fill="#374151">+ sendActionCard(): void</text>
+  <text x="28" y="289" class="member" fill="#374151">+ sendMarkdown(): void</text>
+  <text x="28" y="305" class="member" fill="#374151">+ sendText(): void</text>
+
+  <!-- EmailChannel -->
+  <rect x="200" y="220" width="140" height="70" fill="#ffffff" stroke="#d1d5db" stroke-width="1.5"/>
+  <line x1="200" y1="246" x2="340" y2="246" stroke="#d1d5db" stroke-width="1"/>
+  <line x1="200" y1="262" x2="340" y2="262" stroke="#d1d5db" stroke-width="1"/>
+  <text x="270" y="239" text-anchor="middle" class="class-name" fill="#111827">EmailChannel</text>
+  <text x="208" y="257" class="member" fill="#374151">+ smtpConfig: String</text>
+  <text x="208" y="273" class="member" fill="#374151">+ sendEmail(): void</text>
+
+  <!-- Inheritance arrows -->
+  <line x1="100" y1="220" x2="140" y2="130" stroke="#4b5563" stroke-width="1.5" marker-end="url(#arrow-inherit)"/>
+  <line x1="270" y1="220" x2="170" y2="130" stroke="#4b5563" stroke-width="1.5" marker-end="url(#arrow-inherit)"/>
+
+  <!-- AlertRule -->
+  <rect x="400" y="60" width="160" height="110" fill="#ffffff" stroke="#d1d5db" stroke-width="1.5"/>
+  <line x1="400" y1="86" x2="560" y2="86" stroke="#d1d5db" stroke-width="1"/>
+  <line x1="400" y1="142" x2="560" y2="142" stroke="#d1d5db" stroke-width="1"/>
+  <text x="480" y="79" text-anchor="middle" class="class-name" fill="#111827">AlertRule</text>
+  <text x="408" y="97" class="member" fill="#374151">- id: Long</text>
+  <text x="408" y="113" class="member" fill="#374151">- name: String</text>
+  <text x="408" y="129" class="member" fill="#374151">- formatType: FormatType</text>
+  <text x="408" y="161" class="member" fill="#374151">- templateId: Long</text>
+  <text x="408" y="177" class="member" fill="#374151">- groupIds: List&lt;Long&gt;</text>
+
+  <!-- MessageTemplate -->
+  <rect x="620" y="60" width="160" height="110" fill="#ffffff" stroke="#d1d5db" stroke-width="1.5"/>
+  <line x1="620" y1="86" x2="780" y2="86" stroke="#d1d5db" stroke-width="1"/>
+  <line x1="620" y1="142" x2="780" y2="142" stroke="#d1d5db" stroke-width="1"/>
+  <text x="700" y="79" text-anchor="middle" class="class-name" fill="#111827">MessageTemplate</text>
+  <text x="628" y="97" class="member" fill="#374151">- id: Long</text>
+  <text x="628" y="113" class="member" fill="#374151">- name: String</text>
+  <text x="628" y="129" class="member" fill="#374151">- content: String</text>
+  <text x="628" y="161" class="member" fill="#374151">- requiredSlots: List</text>
+  <text x="628" y="177" class="member" fill="#374151">+ render(context): String</text>
+
+  <!-- CommunicationGroup -->
+  <rect x="400" y="220" width="160" height="95" fill="#ffffff" stroke="#d1d5db" stroke-width="1.5"/>
+  <line x1="400" y1="246" x2="560" y2="246" stroke="#d1d5db" stroke-width="1"/>
+  <line x1="400" y1="278" x2="560" y2="278" stroke="#d1d5db" stroke-width="1"/>
+  <text x="480" y="239" text-anchor="middle" class="class-name" fill="#111827">CommunicationGroup</text>
+  <text x="408" y="257" class="member" fill="#374151">- id: Long</text>
+  <text x="408" y="273" class="member" fill="#374151">- name: String</text>
+  <text x="408" y="289" class="member" fill="#374151">- sendType: SendType</text>
+  <text x="408" y="305" class="member" fill="#374151">- serviceTypes: List</text>
+
+  <!-- Assignee -->
+  <rect x="620" y="220" width="160" height="95" fill="#ffffff" stroke="#d1d5db" stroke-width="1.5"/>
+  <line x1="620" y1="246" x2="780" y2="246" stroke="#d1d5db" stroke-width="1"/>
+  <line x1="620" y1="278" x2="780" y2="278" stroke="#d1d5db" stroke-width="1"/>
+  <text x="700" y="239" text-anchor="middle" class="class-name" fill="#111827">Assignee</text>
+  <text x="628" y="257" class="member" fill="#374151">- id: Long</text>
+  <text x="628" y="273" class="member" fill="#374151">- phone: String</text>
+  <text x="628" y="289" class="member" fill="#374151">- dingdingUsername: String</text>
+  <text x="628" y="305" class="member" fill="#374151">- cnName: String</text>
+
+  <!-- AlertMessage -->
+  <rect x="400" y="400" width="160" height="95" fill="#ffffff" stroke="#d1d5db" stroke-width="1.5"/>
+  <line x1="400" y1="426" x2="560" y2="426" stroke="#d1d5db" stroke-width="1"/>
+  <line x1="400" y1="458" x2="560" y2="458" stroke="#d1d5db" stroke-width="1"/>
+  <text x="480" y="419" text-anchor="middle" class="class-name" fill="#111827">AlertMessage</text>
+  <text x="408" y="437" class="member" fill="#374151">- id: Long</text>
+  <text x="408" y="453" class="member" fill="#374151">- status: MessageStatus</text>
+  <text x="408" y="469" class="member" fill="#374151">- content: String</text>
+  <text x="408" y="485" class="member" fill="#374151">- ruleId: Long</text>
+
+  <!-- FormatType Enum -->
+  <rect x="60" y="580" width="120" height="80" fill="#ffffff" stroke="#d1d5db" stroke-width="1.5"/>
+  <line x1="60" y1="606" x2="180" y2="606" stroke="#d1d5db" stroke-width="1"/>
+  <line x1="60" y1="622" x2="180" y2="622" stroke="#d1d5db" stroke-width="1"/>
+  <text x="120" y="583" text-anchor="middle" class="stereotype" fill="#6b7280">&lt;&lt;enumeration&gt;&gt;</text>
+  <text x="120" y="601" text-anchor="middle" class="class-name" fill="#111827">FormatType</text>
+  <text x="68" y="637" class="member" fill="#374151">PROMETHEUS</text>
+  <text x="68" y="653" class="member" fill="#374151">JSON</text>
+
+  <!-- SendType Enum -->
+  <rect x="220" y="580" width="120" height="80" fill="#ffffff" stroke="#d1d5db" stroke-width="1.5"/>
+  <line x1="220" y1="606" x2="340" y2="606" stroke="#d1d5db" stroke-width="1"/>
+  <line x1="220" y1="622" x2="340" y2="622" stroke="#d1d5db" stroke-width="1"/>
+  <text x="280" y="583" text-anchor="middle" class="stereotype" fill="#6b7280">&lt;&lt;enumeration&gt;&gt;</text>
+  <text x="280" y="601" text-anchor="middle" class="class-name" fill="#111827">SendType</text>
+  <text x="228" y="637" class="member" fill="#374151">SERVICE_TYPE</text>
+  <text x="228" y="653" class="member" fill="#374151">ALL</text>
+
+  <!-- MessageStatus Enum -->
+  <rect x="380" y="580" width="120" height="95" fill="#ffffff" stroke="#d1d5db" stroke-width="1.5"/>
+  <line x1="380" y1="606" x2="500" y2="606" stroke="#d1d5db" stroke-width="1"/>
+  <line x1="380" y1="622" x2="500" y2="622" stroke="#d1d5db" stroke-width="1"/>
+  <text x="440" y="583" text-anchor="middle" class="stereotype" fill="#6b7280">&lt;&lt;enumeration&gt;&gt;</text>
+  <text x="440" y="601" text-anchor="middle" class="class-name" fill="#111827">MessageStatus</text>
+  <text x="388" y="637" class="member" fill="#374151">PENDING</text>
+  <text x="388" y="653" class="member" fill="#374151">SENT</text>
+  <text x="388" y="669" class="member" fill="#374151">FAILED</text>
+
+  <!-- Associations -->
+  <!-- AlertRule -&gt; MessageTemplate (uses) -->
+  <line x1="560" y1="116" x2="620" y2="116" stroke="#4b5563" stroke-width="1.5" marker-end="url(#arrow-assoc)"/>
+  <text x="590" y="108" text-anchor="middle" font-size="11" fill="#6b7280">1</text>
+  <text x="590" y="132" text-anchor="middle" font-size="11" fill="#6b7280">1</text>
+
+  <!-- AlertRule -&gt; CommunicationGroup (notifies) -->
+  <line x1="480" y1="170" x2="480" y2="220" stroke="#4b5563" stroke-width="1.5" marker-end="url(#arrow-assoc)"/>
+  <text x="470" y="200" text-anchor="end" font-size="11" fill="#6b7280">1</text>
+  <text x="492" y="200" font-size="11" fill="#6b7280">*</text>
+
+  <!-- CommunicationGroup composition -&gt; Assignee -->
+  <line x1="560" y1="267" x2="620" y2="267" stroke="#4b5563" stroke-width="1.5" marker-end="url(#arrow-assoc)"/>
+  <polygon points="560,267 568,263 568,271" fill="#4b5563" stroke="#4b5563"/>
+  <text x="590" y="259" text-anchor="middle" font-size="11" fill="#6b7280">1</text>
+  <text x="590" y="283" text-anchor="middle" font-size="11" fill="#6b7280">*</text>
+
+  <!-- AlertRule -&gt; AlertMessage -->
+  <line x1="480" y1="315" x2="480" y2="400" stroke="#4b5563" stroke-width="1.5" marker-end="url(#arrow-assoc)"/>
+  <text x="470" y="360" text-anchor="end" font-size="11" fill="#6b7280">1</text>
+  <text x="492" y="360" font-size="11" fill="#6b7280">*</text>
+
+  <!-- Enum associations (dashed dependency) -->
+  <line x1="460" y1="170" x2="460" y2="580" stroke="#4b5563" stroke-width="1.5" stroke-dasharray="4,2" marker-end="url(#arrow-assoc)"/>
+  <text x="450" y="380" text-anchor="end" font-size="11" fill="#6b7280">uses</text>
+
+  <line x1="500" y1="267" x2="340" y2="580" stroke="#4b5563" stroke-width="1.5" stroke-dasharray="4,2" marker-end="url(#arrow-assoc)"/>
+  <text x="420" y="420" text-anchor="end" font-size="11" fill="#6b7280">uses</text>
+
+  <line x1="520" y1="448" x2="440" y2="580" stroke="#4b5563" stroke-width="1.5" stroke-dasharray="4,2" marker-end="url(#arrow-assoc)"/>
+  <text x="480" y="514" text-anchor="end" font-size="11" fill="#6b7280">uses</text>
+
+  <!-- Legend -->
+  <g transform="translate(700, 620)">
+    <line x1="0" y1="5" x2="30" y2="5" stroke="#4b5563" stroke-width="1.5" marker-end="url(#arrow-inherit)"/>
+    <text x="36" y="9" font-size="11" fill="#6b7280">Inheritance</text>
+    <line x1="0" y1="22" x2="30" y2="22" stroke="#4b5563" stroke-width="1.5" marker-end="url(#arrow-assoc)"/>
+    <text x="36" y="26" font-size="11" fill="#6b7280">Association</text>
+    <line x1="0" y1="39" x2="30" y2="39" stroke="#4b5563" stroke-width="1.5" stroke-dasharray="4,2" marker-end="url(#arrow-assoc)"/>
+    <text x="36" y="43" font-size="11" fill="#6b7280">Dependency</text>
+    <polygon points="0,55 8,51 8,59" fill="#4b5563" stroke="#4b5563"/>
+    <line x1="8" y1="55" x2="30" y2="55" stroke="#4b5563" stroke-width="1.5"/>
+    <text x="36" y="59" font-size="11" fill="#6b7280">Composition</text>
+  </g>
+</svg>

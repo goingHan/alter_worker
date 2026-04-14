@@ -1,0 +1,14 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(grep -E \"\\\\.\\(py|json|yaml|yml\\)$\")",
+      "Bash(dir D:\\\\develop\\\\python_source\\\\MeloTTS-main:*)",
+      "Bash(cp:*)",
+      "Bash(python -m ruff --version)",
+      "Bash(python -m mypy --version)",
+      "Bash(python3:*)",
+      "Bash(rsvg-convert --version)",
+      "Bash(python:*)"
+    ]
+  }
+}
