@@ -1,0 +1,44 @@
+spring:
+  application:
+    name: alertworker-worker
+  config:
+    import:
+      # #AI-CODE-CLASS-dev_release/v0.0.1-20260804: align dataId with existing nacos shared-config.yaml
+      - nacos:shared-config.yaml?refreshEnabled=true
+  cloud:
+    nacos:
+      config:
+        # #AI-CODE-CLASS-dev_release/v0.0.1-20260810: align nacos defaults with datamanager/gateway so worker starts without env vars
+        server-addr: ${NACOS_SERVER_ADDR:172.168.1.249:28848}
+        namespace: ${NACOS_NAMESPACE:business_test}
+        # #AI-CODE-CLASS-dev_release/v0.0.1-20260805: use nacos admin account (alter_worker lacks config read permission -> 403)
+        username: ${NACOS_USERNAME:nacos}
+        password: ${NACOS_PASSWORD:123.com}
+        group: DEFAULT_GROUP
+        file-extension: yaml
+  # #AI-CODE-CLASS-dev_release/v0.0.1-20260804: datasource moved to nacos shared-config.yaml
+  flyway:
+    enabled: false
+    locations: classpath:db/migration
+    baseline-on-migrate: true
+
+server:
+  port: 8082
+
+mybatis-plus:
+  configuration:
+    log-impl: org.apache.ibatis.logging.stdout.StdOutImpl
+  global-config:
+    db-config:
+      id-type: auto
+      logic-delete-field: deleted
+      logic-delete-value: 1
+      logic-not-delete-value: 0
+
+alertworker:
+  rabbitmq:
+    exchange: alertworker.exchange
+    routing-key: alertworker.routing.key
+    queue: alertworker.queue
+    dlq: alertworker.dlq
+    dlx: alertworker.dlx
