@@ -1,0 +1,32 @@
+# AlertWorker Shared Config for Nacos
+# #AI-CODE-FILE-dev_release/v0.0.1-20260804: align with actual nacos dataId used by all modules
+# Upload this to Nacos as: shared-config.yaml (group: DEFAULT_GROUP, namespace: business_test)
+# #AI-CODE-CLASS-dev_release/v0.0.1-20260805: rabbitmq connection moved under spring.rabbitmq so Spring Boot autoconfig connects to the right broker
+
+spring:
+  datasource:
+    url: jdbc:postgresql://172.168.1.238:25432/alertworker
+    username: airflow
+    password: airflow
+    driver-class-name: org.postgresql.Driver
+  mail:
+    host: smtp.example.com
+    port: 587
+    username: alerts@example.com
+    password: your-email-password
+    protocol: smtp
+    default-encoding: UTF-8
+  rabbitmq:
+    host: 172.168.1.238
+    port: 5672
+    username: celery
+    password: 123.com
+    virtual-host: alter_worker
+
+alertworker:
+  rabbitmq:
+    exchange: alertworker.exchange
+    routing-key: alertworker.routing.key
+    queue: alertworker.queue
+    dlq: alertworker.dlq
+    dlx: alertworker.dlx
