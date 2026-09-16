@@ -2,11 +2,15 @@
 
 ## Overview
 
-| Service | Base URL | Port |
-|---------|----------|------|
-| DataManager | `http://localhost:8080` | 8080 |
-| MessageGateway | `http://localhost:8081` | 8081 |
-| Worker | `http://localhost:8082` | 8082 |
+每个后端模块通过 `server.servlet.context-path` 自带 URL 前缀，从 URL 即可区分应用：
+
+| Service | Base URL | Port | Prefix |
+|---------|----------|------|--------|
+| DataManager | `http://localhost:8083/pw/alertworker/dm` | 8083 | `/pw/alertworker/dm` |
+| MessageGateway | `http://localhost:8081/pw/alertworker/gw` | 8081 | `/pw/alertworker/gw` |
+| Worker | `http://localhost:8082/pw/alertworker/worker` | 8082 | `/pw/alertworker/worker` |
+
+下文端点路径均以完整路径（工程前缀 + 模块前缀）书写。
 
 ---
 
@@ -14,7 +18,7 @@
 
 ### 1. Submit Prometheus Alert
 
-**Endpoint**: `POST /api/v1/alerts/prometheus`
+**Endpoint**: `POST /gw/pw/alertworker/dm/api/v1/alerts/prometheus`
 
 **Headers**:
 - `X-API-Key` (required): Valid API key value
@@ -89,7 +93,7 @@ The payload **must** follow the standard Prometheus Alertmanager webhook format 
 
 ### 2. Submit JSON Alert
 
-**Endpoint**: `POST /api/v1/alerts/json`
+**Endpoint**: `POST /gw/pw/alertworker/dm/api/v1/alerts/json`
 
 **Headers**:
 - `X-API-Key` (required): Valid API key value
@@ -142,7 +146,7 @@ The payload **must** be a valid JSON object with the following requirements:
 
 ### 3. Test Message Channel
 
-**Endpoint**: `POST /api/v1/channels/{id}/test`
+**Endpoint**: `POST /gw/pw/alertworker/dm/api/v1/channels/{id}/test`
 
 **Response (Success)**:
 ```json
@@ -162,46 +166,89 @@ The payload **must** be a valid JSON object with the following requirements:
 
 ---
 
+### 4. Test Alert Through Rules（2026-09-16 起）
+
+**Endpoint**: `POST /pw/alertworker/gw/api/v1/test-alerts`
+
+在规则页勾选多条规则后发送测试告警。测试消息走与生产一致的全链路（写 `alert_message` → RabbitMQ → worker 渲染分发），最终状态可在「告警历史」查看。
+
+**Body**:
+
+| 字段 | 必填 | 说明 |
+|---|---|---|
+| `ruleIds` | 随机模式必填 | 选中的规则 id 列表 |
+| `channelId` | 否 | 指定则强制走该 `message_channel`；留空按规则绑定通道（未绑定走默认通道） |
+| `mode` | 否 | `auto`（默认，随机生成、跳过 matcher）/ `payload`（手动报文、走真实 matcher） |
+| `alertType` | 否 | `payload` 模式下的报文类型，默认取第一条规则的类型 |
+| `rawPayload` | 否 | 手动上报的报文原文；有值时即视为 `payload` 模式 |
+
+**Response**:
+```json
+{
+  "mode": "auto",
+  "message": "已提交 2 条测试告警",
+  "results": [
+    {
+      "ruleId": 1,
+      "ruleName": "cpu-alert",
+      "matchedRuleId": 1,
+      "matchedRuleName": "cpu-alert",
+      "messageNo": "1758000000000001",
+      "recordId": 42,
+      "recipientCount": 2,
+      "success": true,
+      "error": null
+    }
+  ]
+}
+```
+
+- `auto` 模式：为每条选中规则生成随机报文（Prometheus 生成 Alertmanager webhook 结构，JSON 生成平铺键值，规则条件里的字段会填入示例值），跳过 matcher 直接使用该规则
+- `payload` 模式：报文交给真实 `AlertRuleMatcher` 匹配，`matchedRule*` 为实际命中的规则
+- `apiKeyId` 自动取第一条未删除的 API 密钥（无密钥时返回 400）
+
+---
+
 ## DataManager APIs
 
 ### API Keys
 
 #### List API Keys
-- **GET** `/api/v1/api-keys?current=1&size=20`
+- **GET** `/pw/alertworker/dm/api/v1/api-keys?current=1&size=20`
 - **Response**: MyBatis-Plus `Page<ApiKey>`
 
 #### Get API Key
-- **GET** `/api/v1/api-keys/{id}`
+- **GET** `/pw/alertworker/dm/api/v1/api-keys/{id}`
 
 #### Create API Key
-- **POST** `/api/v1/api-keys`
-- **Body**:
+- **POST** `/pw/alertworker/dm/api/v1/api-keys`
+- **Body**（`apiValue` 由服务端自动生成，无需传入，传入值会被忽略）:
 ```json
 {
   "name": "production",
-  "apiValue": "prod-key-123",
   "rateLimit": 100
 }
 ```
+- **Response**: 完整 `ApiKey` 对象，`apiValue` 为生成的明文密钥（格式 `aw-` + 64 位十六进制），**仅创建时返回一次**；列表/详情接口均返回掩码值。
 
 #### Update API Key
-- **PUT** `/api/v1/api-keys/{id}`
+- **PUT** `/pw/alertworker/dm/api/v1/api-keys/{id}`
 
 #### Delete API Key
-- **DELETE** `/api/v1/api-keys/{id}`
+- **DELETE** `/pw/alertworker/dm/api/v1/api-keys/{id}`
 
 ---
 
 ### Message Channels
 
 #### List Channels
-- **GET** `/api/v1/channels?current=1&size=20`
+- **GET** `/pw/alertworker/dm/api/v1/channels?current=1&size=20`
 
 #### Get Channel
-- **GET** `/api/v1/channels/{id}`
+- **GET** `/pw/alertworker/dm/api/v1/channels/{id}`
 
 #### Create Channel
-- **POST** `/api/v1/channels`
+- **POST** `/pw/alertworker/dm/api/v1/channels`
 - **Body** (DingDing):
 ```json
 {
@@ -221,23 +268,29 @@ The payload **must** be a valid JSON object with the following requirements:
 ```
 
 #### Update Channel
-- **PUT** `/api/v1/channels/{id}`
+- **PUT** `/pw/alertworker/dm/api/v1/channels/{id}`
+- Body 中的 `isDefault: true` 会把该通道设为所属渠道类型的默认通道（同类型仅保留一个默认）
+
+#### Set Default Channel（2026-09-16 起）
+- **PUT** `/pw/alertworker/dm/api/v1/channels/{id}/default`
+- **Body**: `{"default": true}`（`false` 取消默认）
+- 未显式绑定通道的规则会走对应渠道类型的默认通道
 
 #### Delete Channel
-- **DELETE** `/api/v1/channels/{id}`
+- **DELETE** `/pw/alertworker/dm/api/v1/channels/{id}`
 
 ---
 
 ### Assignees
 
 #### List Assignees
-- **GET** `/api/v1/assignees?current=1&size=20`
+- **GET** `/pw/alertworker/dm/api/v1/assignees?current=1&size=20`
 
 #### Get Assignee
-- **GET** `/api/v1/assignees/{id}`
+- **GET** `/pw/alertworker/dm/api/v1/assignees/{id}`
 
 #### Create Assignee
-- **POST** `/api/v1/assignees`
+- **POST** `/pw/alertworker/dm/api/v1/assignees`
 - **Body**:
 ```json
 {
@@ -248,23 +301,23 @@ The payload **must** be a valid JSON object with the following requirements:
 ```
 
 #### Update Assignee
-- **PUT** `/api/v1/assignees/{id}`
+- **PUT** `/pw/alertworker/dm/api/v1/assignees/{id}`
 
 #### Delete Assignee
-- **DELETE** `/api/v1/assignees/{id}`
+- **DELETE** `/pw/alertworker/dm/api/v1/assignees/{id}`
 
 ---
 
 ### Communication Groups
 
 #### List Groups
-- **GET** `/api/v1/groups?current=1&size=20`
+- **GET** `/pw/alertworker/dm/api/v1/groups?current=1&size=20`
 
 #### Get Group
-- **GET** `/api/v1/groups/{id}`
+- **GET** `/pw/alertworker/dm/api/v1/groups/{id}`
 
 #### Create Group
-- **POST** `/api/v1/groups`
+- **POST** `/pw/alertworker/dm/api/v1/groups`
 - **Body**:
 ```json
 {
@@ -274,16 +327,16 @@ The payload **must** be a valid JSON object with the following requirements:
 ```
 
 #### Update Group
-- **PUT** `/api/v1/groups/{id}`
+- **PUT** `/pw/alertworker/dm/api/v1/groups/{id}`
 
 #### Delete Group
-- **DELETE** `/api/v1/groups/{id}`
+- **DELETE** `/pw/alertworker/dm/api/v1/groups/{id}`
 
 #### List Group Assignees
-- **GET** `/api/v1/groups/{id}/assignees`
+- **GET** `/pw/alertworker/dm/api/v1/groups/{id}/assignees`
 
 #### Add Assignee to Group
-- **POST** `/api/v1/groups/{id}/assignees`
+- **POST** `/pw/alertworker/dm/api/v1/groups/{id}/assignees`
 - **Body**:
 ```json
 {
@@ -294,38 +347,37 @@ The payload **must** be a valid JSON object with the following requirements:
 ```
 
 #### Remove Assignee from Group
-- **DELETE** `/api/v1/groups/{id}/assignees/{assigneeId}`
+- **DELETE** `/pw/alertworker/dm/api/v1/groups/{id}/assignees/{assigneeId}`
 
 ---
 
 ### Message Templates
 
 #### List Templates
-- **GET** `/api/v1/templates?current=1&size=20`
+- **GET** `/pw/alertworker/dm/api/v1/templates?current=1&size=20`
 
 #### Get Template
-- **GET** `/api/v1/templates/{id}`
+- **GET** `/pw/alertworker/dm/api/v1/templates/{id}`
 
 #### Create Template
-- **POST** `/api/v1/templates`
-- **Body**:
+- **POST** `/pw/alertworker/dm/api/v1/templates`
+- **Body**（模板不绑定渠道，`channelType` 由规则绑定 `alert_rule_template` 时指定，可不传）:
 ```json
 {
   "name": "alert-dingding",
-  "channelType": "DINGDING",
   "content": "Alert: {{ title }} - {{ content }}",
   "isDefault": false
 }
 ```
 
 #### Update Template
-- **PUT** `/api/v1/templates/{id}`
+- **PUT** `/pw/alertworker/dm/api/v1/templates/{id}`
 
 #### Delete Template
-- **DELETE** `/api/v1/templates/{id}`
+- **DELETE** `/pw/alertworker/dm/api/v1/templates/{id}`
 
 #### Preview Template
-- **POST** `/api/v1/templates/{id}/preview`
+- **POST** `/pw/alertworker/dm/api/v1/templates/{id}/preview`
 - **Body**: Jinja2 context map
 ```json
 {
@@ -340,13 +392,13 @@ The payload **must** be a valid JSON object with the following requirements:
 ### Alert Rules
 
 #### List Rules
-- **GET** `/api/v1/rules?current=1&size=20`
+- **GET** `/pw/alertworker/dm/api/v1/rules?current=1&size=20`
 
 #### Get Rule
-- **GET** `/api/v1/rules/{id}`
+- **GET** `/pw/alertworker/dm/api/v1/rules/{id}`
 
 #### Create Rule
-- **POST** `/api/v1/rules`
+- **POST** `/pw/alertworker/dm/api/v1/rules`
 - **Body**:
 ```json
 {
@@ -354,22 +406,54 @@ The payload **must** be a valid JSON object with the following requirements:
   "alertType": "PROMETHEUS",
   "matchKey": "alertname",
   "matchValue": "CPUHigh",
+  "matchLogic": "AND",
+  "matchConditions": "[{\"key\":\"alertname\",\"value\":\"CPUHigh\",\"op\":\"AND\"},{\"key\":\"severity\",\"value\":\"critical\",\"op\":\"AND\"},{\"key\":\"env\",\"value\":\"prod\",\"op\":\"NOT\"}]",
+  "channelIds": [3, 5],
   "retryMax": 3,
   "retryBackoff": "5,10,20"
 }
 ```
 
+- `channelIds`（2026-09-16 起，Create/Update 均支持）：规则绑定的消息渠道 id 数组，可空；**全量替换**语义 —— 不传（null）= 不改动绑定，空数组 = 解除全部绑定（走渠道类型默认通道）
+
+**匹配条件逻辑**（2026-09-16 起）：
+- `matchConditions`：JSON 数组，每项 `{key, value, op?}`；`op` ∈ `AND`（且）/ `OR`（或）/ `NOT`（非，等价于「且非」）
+- 求值顺序：第一个条件为表达式起点（`AND`/`OR` 视为起点，`NOT` 表示对首个条件取反），其后各条件按其 `op` 与左侧结果结合，自上而下左结合。例：`A AND B NOT C` = `(A AND B) AND NOT C`
+- 兼容：旧格式 `{key, value, not?}`（无 `op` 字段）仍按全局 `matchLogic`（`OR` 默认 / `AND`）+ `not` 取反求值；`matchLogic` 仅作为旧数据回退逻辑
+- `value` 留空表示"字段存在即命中"；取反条件在字段不存在时也视为命中；`matchKey`/`matchValue` 始终保存第一个条件（兼容旧逻辑，实际匹配以 `matchConditions` 为准）
+
 #### Update Rule
-- **PUT** `/api/v1/rules/{id}`
+- **PUT** `/pw/alertworker/dm/api/v1/rules/{id}`
 
 #### Delete Rule
-- **DELETE** `/api/v1/rules/{id}`
+- **DELETE** `/pw/alertworker/dm/api/v1/rules/{id}`
+
+#### List Rule Channels（2026-09-16 起）
+- **GET** `/pw/alertworker/dm/api/v1/rules/{id}/channels`
+- **Response**: `[{"ruleId":1,"channelId":3,"channelName":"ops-dingding","channelType":"DINGDING"}]`
+- 规则可绑定多个通道（同类型多条 = 全部发送）；未绑定的规则走该渠道类型的默认通道
+
+#### List All Rule Channels（规则表格用）
+- **GET** `/pw/alertworker/dm/api/v1/rules/channels`
+
+#### Bind Channel to Rule
+- **POST** `/pw/alertworker/dm/api/v1/rules/{id}/channels`
+- **Body**: `{"channelId": 3}`
+
+#### Unbind Channel
+- **DELETE** `/pw/alertworker/dm/api/v1/rules/{id}/channels/{channelId}`
+
+#### Batch Replace Rule Channels（批量关联渠道）
+- **PUT** `/pw/alertworker/dm/api/v1/rules/channels`
+- **Body**: `{"ruleIds": [1, 2], "channelIds": [3, 5]}`
+- 将选中规则的渠道绑定统一替换为 `channelIds`；`channelIds` 为空数组 = 解除全部绑定
+- **Response**: `{"updated": 2}`
 
 #### List Rule Groups
-- **GET** `/api/v1/rules/{id}/groups`
+- **GET** `/pw/alertworker/dm/api/v1/rules/{id}/groups`
 
 #### Add Group to Rule
-- **POST** `/api/v1/rules/{id}/groups`
+- **POST** `/pw/alertworker/dm/api/v1/rules/{id}/groups`
 - **Body**:
 ```json
 {
@@ -378,13 +462,13 @@ The payload **must** be a valid JSON object with the following requirements:
 ```
 
 #### Remove Group from Rule
-- **DELETE** `/api/v1/rules/{id}/groups/{groupId}`
+- **DELETE** `/pw/alertworker/dm/api/v1/rules/{id}/groups/{groupId}`
 
 #### List Rule Templates
-- **GET** `/api/v1/rules/{id}/templates`
+- **GET** `/pw/alertworker/dm/api/v1/rules/{id}/templates`
 
 #### Add Template to Rule
-- **POST** `/api/v1/rules/{id}/templates`
+- **POST** `/pw/alertworker/dm/api/v1/rules/{id}/templates`
 - **Body**:
 ```json
 {
@@ -394,42 +478,42 @@ The payload **must** be a valid JSON object with the following requirements:
 ```
 
 #### Remove Template from Rule
-- **DELETE** `/api/v1/rules/{id}/templates/{templateId}`
+- **DELETE** `/pw/alertworker/dm/api/v1/rules/{id}/templates/{templateId}`
 
 ---
 
 ### Alert History & Monitoring
 
 #### Alert History
-- **GET** `/api/v1/alerts/history?current=1&size=20`
+- **GET** `/pw/alertworker/dm/api/v1/alerts/history?current=1&size=20`
 - **Response**: `Page<AlertMessage>`
 
 #### Alert Detail
-- **GET** `/api/v1/alerts/history/{id}`
+- **GET** `/pw/alertworker/dm/api/v1/alerts/history/{id}`
 
 #### Delivery Logs
-- **GET** `/api/v1/alerts/delivery-logs?status=success&current=1&size=20`
+- **GET** `/pw/alertworker/dm/api/v1/alerts/delivery-logs?status=success&current=1&size=20`
 - Query `status` values: `recieved`, `GW_SENT`, `DELIVERED`, `WORKER_SENT`, `FAILED`, `success`
 
 #### Failed Messages
-- **GET** `/api/v1/alerts/failed?current=1&size=20`
+- **GET** `/pw/alertworker/dm/api/v1/alerts/failed?current=1&size=20`
 
 #### Dead Letters
-- **GET** `/api/v1/alerts/dead-letters?current=1&size=20`
+- **GET** `/pw/alertworker/dm/api/v1/alerts/dead-letters?current=1&size=20`
 
 ---
 
 ### Real-Time Alerts (SSE)
 
 #### SSE Stream
-- **GET** `/api/v1/sse/alerts`
+- **GET** `/pw/alertworker/dm/api/v1/sse/alerts`
 - **Content-Type**: `text/event-stream`
 - **Event Name**: `alerts`
 - **Data**: JSON array of new `AlertMessage` records emitted every 3 seconds
 
 **JavaScript Example**:
 ```javascript
-const eventSource = new EventSource('/api/v1/sse/alerts');
+const eventSource = new EventSource('/pw/alertworker/dm/api/v1/sse/alerts');
 eventSource.addEventListener('alerts', (e) => {
   const newAlerts = JSON.parse(e.data);
   console.log(newAlerts);
@@ -441,13 +525,13 @@ eventSource.addEventListener('alerts', (e) => {
 ### Dictionary
 
 #### List Dictionaries
-- **GET** `/api/v1/dictionaries?current=1&size=20&dictType=message_status`
+- **GET** `/pw/alertworker/dm/api/v1/dictionaries?current=1&size=20&dictType=message_status`
 
 #### Get by Type
-- **GET** `/api/v1/dictionaries/types/{dictType}`
+- **GET** `/pw/alertworker/dm/api/v1/dictionaries/types/{dictType}`
 
 #### Create Dictionary Entry
-- **POST** `/api/v1/dictionaries`
+- **POST** `/pw/alertworker/dm/api/v1/dictionaries`
 - **Body**:
 ```json
 {
@@ -458,10 +542,10 @@ eventSource.addEventListener('alerts', (e) => {
 ```
 
 #### Update Dictionary Entry
-- **PUT** `/api/v1/dictionaries/{id}`
+- **PUT** `/pw/alertworker/dm/api/v1/dictionaries/{id}`
 
 #### Delete Dictionary Entry
-- **DELETE** `/api/v1/dictionaries/{id}`
+- **DELETE** `/pw/alertworker/dm/api/v1/dictionaries/{id}`
 
 ---
 
@@ -510,7 +594,7 @@ eventSource.addEventListener('alerts', (e) => {
 {
   "id": 1,
   "name": "production",
-  "apiValue": "prod-key-123",
+  "apiValue": "aw-3f9c...（仅创建响应返回明文，其余接口返回 **** 掩码）",
   "rateLimit": 100,
   "createdAt": "2026-04-16T10:00:00",
   "updatedAt": "2026-04-16T10:00:00",

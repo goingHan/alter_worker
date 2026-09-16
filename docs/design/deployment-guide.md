@@ -4,17 +4,19 @@ Deploy AlertWorker in test and production environments. Covers configuration, Do
 
 ## Architecture at a Glance
 
-| Service | Port | Purpose |
-|---|---|---|
-| `alertworker-datamanager` | 8080 | Stateless CRUD API, configuration frontend |
-| `alertworker-gateway` | 8081 | Alert ingestion, API key validation, rule matching, MQ enqueue |
-| `alertworker-worker` | 8082 | RabbitMQ consumer, template rendering, channel dispatch |
-| `frontend` | 3000 | Vue 3 management console |
-| PostgreSQL | 5432 | Primary database |
-| RabbitMQ | 5672 / 15672 | Message broker + management UI |
-| Nacos | 8848 / 9848 | Configuration center |
+| Service | Port | URL Prefix | Purpose |
+|---|---|---|---|
+| `alertworker-datamanager` | 8083 | `/pw/alertworker/dm` | Stateless CRUD API, configuration frontend |
+| `alertworker-gateway` | 8081 | `/pw/alertworker/gw` | Alert ingestion, API key validation, rule matching, MQ enqueue |
+| `alertworker-worker` | 8082 | `/pw/alertworker/worker` | RabbitMQ consumer, template rendering, channel dispatch |
+| `frontend` | 3000 | — | Vue 3 management console |
+| PostgreSQL | 5432 | — | Primary database |
+| RabbitMQ | 5672 / 15672 | — | Message broker + management UI |
+| Nacos | 8848 / 9848 | — | Configuration center |
 
-All three backend services depend on PostgreSQL, RabbitMQ, and Nacos. The frontend proxies API calls to `alertworker-datamanager` (port 8080).
+> URL 结构 = **工程前缀 `/pw/alertworker`**（用于与其他工程区分）+ **模块前缀**（datamanager=`/dm`、gateway=`/gw`、worker=`/worker`，由各应用 `server.servlet.context-path` 实现），从 URL 即可区分工程与应用。
+
+All three backend services depend on PostgreSQL, RabbitMQ, and Nacos. The frontend proxies API calls to `alertworker-datamanager` (port 8083).
 
 ---
 
@@ -314,8 +316,16 @@ server {
     root /usr/share/nginx/html;
     index index.html;
 
-    location /api {
-        proxy_pass http://alertworker-datamanager:8080;
+    # gateway：告警接入 / 死信重试 / 通道测试（/pw/alertworker/gw）
+    location /pw/alertworker/gw/ {
+        proxy_pass http://alertworker-gateway:8081;
+        proxy_set_header Host $host;
+        proxy_set_header X-Real-IP $remote_addr;
+    }
+
+    # datamanager：配置 CRUD / 告警历史（/pw/alertworker/dm）
+    location /pw/alertworker/dm/ {
+        proxy_pass http://alertworker-datamanager:8083;
         proxy_set_header Host $host;
         proxy_set_header X-Real-IP $remote_addr;
     }
@@ -574,9 +584,9 @@ After starting the infrastructure, manually import the config via the Nacos web 
 Each backend service exposes Spring Boot actuator endpoints (if enabled):
 
 ```bash
-curl http://localhost:8080/actuator/health    # DataManager
-curl http://localhost:8081/actuator/health    # Gateway
-curl http://localhost:8082/actuator/health    # Worker
+curl http://localhost:8083/pw/alertworker/dm/actuator/health      # DataManager
+curl http://localhost:8081/pw/alertworker/gw/actuator/health      # Gateway
+curl http://localhost:8082/pw/alertworker/worker/actuator/health  # Worker
 ```
 
 ### End-to-End Test
@@ -589,7 +599,7 @@ curl http://localhost:8082/actuator/health    # Worker
 6. Send a test alert:
 
 ```bash
-curl -X POST http://localhost:8081/api/v1/alerts/json \
+curl -X POST http://localhost:8081/pw/alertworker/gw/api/v1/alerts/json \
   -H "X-API-Key: your-api-key-value" \
   -H "Content-Type: application/json" \
   -d '{"service_type": "demo", "title": "Test Alert", "content": "Hello from AlertWorker"}'

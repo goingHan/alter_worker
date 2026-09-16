@@ -212,7 +212,7 @@ VALUES (4, 'ops-dingding-signed', 'DINGDING',
 1. **模板**：`alert_rule_template(rule_id, template_id, channel_type='DINGDING')` 关联到 `message_template`（`channel_type='DINGDING'`），或依赖 `is_default=true` 兜底模板。
 2. **接收人**：HTTP 请求体里 `recipients[].channelType = "DINGDING"`、`recipients[].messageChannelId` 指向上面的通道 `id`。
 
-> 验证通道是否可用：直接发一条 `POST /api/v1/worker/dispatch`（见第 2 节），或走 DataManager 的 `POST /api/v1/channels/{id}/test` 通道测试接口。
+> 验证通道是否可用：直接发一条 `POST /pw/alertworker/worker/api/v1/worker/dispatch`（见第 2 节），或走 DataManager 的 `POST /pw/alertworker/gw/api/v1/channels/{id}/test` 通道测试接口。
 >
 > 通过前端页面或 DataManager API 配置钉钉通道的完整步骤，另见 [`dingding-alert-config.md`](./dingding-alert-config.md)。
 
@@ -240,7 +240,7 @@ VALUES (4, 'ops-dingding-signed', 'DINGDING',
 ## 6. 调用示例
 
 ```bash
-curl -X POST http://localhost:8082/api/v1/worker/dispatch \
+curl -X POST http://localhost:8082/pw/alertworker/worker/api/v1/worker/dispatch \
   -H "Content-Type: application/json" \
   -d '{
     "alertMessageId": 42,

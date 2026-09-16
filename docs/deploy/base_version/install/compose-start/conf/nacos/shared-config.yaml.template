@@ -1,0 +1,32 @@
+# AlertWorker 共享配置模板（nacos-init 容器渲染后发布到 Nacos）
+#
+# 占位符语法：@VAR_NAME@（由 nacos-init 容器用 .env 注入的环境变量通过 sed 替换）
+# 发布目标：dataId=shared-config.yaml，group=DEFAULT_GROUP，tenant=NACOS_NAMESPACE
+
+spring:
+  datasource:
+    url: jdbc:postgresql://@DB_HOST@:@DB_PORT@/@POSTGRES_DB@
+    username: @POSTGRES_USER@
+    password: @POSTGRES_PASSWORD@
+    driver-class-name: org.postgresql.Driver
+  mail:
+    host: @MAIL_HOST@
+    port: @MAIL_PORT@
+    username: @MAIL_USERNAME@
+    password: @MAIL_PASSWORD@
+    protocol: smtp
+    default-encoding: UTF-8
+  rabbitmq:
+    host: @RABBITMQ_HOST@
+    port: @RABBITMQ_PORT@
+    username: @RABBITMQ_USERNAME@
+    password: @RABBITMQ_PASSWORD@
+    virtual-host: @RABBITMQ_VHOST@
+
+alertworker:
+  rabbitmq:
+    exchange: alertworker.exchange
+    routing-key: alertworker.routing.key
+    queue: alertworker.queue
+    dlq: alertworker.dlq
+    dlx: alertworker.dlx

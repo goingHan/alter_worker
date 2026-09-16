@@ -1,8 +1,9 @@
 #!/bin/bash
 set -e
 
-BASE_URL="http://localhost:8081"
-DM_URL="http://localhost:8080"
+# URL = 工程前缀 /pw/alertworker + 模块 context-path（gateway=/gw，datamanager=/dm）
+BASE_URL="http://localhost:8081/pw/alertworker/gw"
+DM_URL="http://localhost:8083/pw/alertworker/dm"
 
 echo "=== AlertWorker E2E Test ==="
 

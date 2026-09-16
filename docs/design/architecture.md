@@ -70,7 +70,7 @@
 ## Data Flow (Alert Lifecycle)
 
 ```
-1. External system → POST /api/v1/alerts/*  (Gateway)
+1. External system → POST /pw/alertworker/gw/api/v1/alerts/*  (Gateway)
 2. Gateway validates API key, rate limits, parses alert, matches rule
 3. Gateway → RabbitMQ (AlertMessagePayload with context + recipients)
 4. Worker ← RabbitMQ (consumes)

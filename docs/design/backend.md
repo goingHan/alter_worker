@@ -6,11 +6,11 @@
 
 | Class | Path | Port |
 |---|---|---|
-| `DataManagerApplication` | `alertworker-datamanager/` | 8080 |
-| `GatewayApplication` | `alertworker-gateway/` | 8081 |
-| `WorkerApplication` | `alertworker-worker/` | 8082 |
+| `DataManagerApplication` | `alertworker-datamanager/` | 8083 (prefix `/pw/alertworker/dm`) |
+| `GatewayApplication` | `alertworker-gateway/` | 8081 (prefix `/pw/alertworker/gw`) |
+| `WorkerApplication` | `alertworker-worker/` | 8082 (prefix `/pw/alertworker/worker`) |
 
-## DataManager — CRUD Routes (port 8080)
+## DataManager — CRUD Routes (port 8083, context-path `/pw/alertworker/dm`; full path = that prefix + path below)
 
 All routes are `GET/POST/PUT/DELETE` standard CRUD unless noted.
 
@@ -50,9 +50,9 @@ All routes are `GET/POST/PUT/DELETE` standard CRUD unless noted.
 ### /api/v1/sse/alerts → `AlertSseController`
 - `GET /sse/alerts` — real-time SSE stream (polls DB every 3s)
 
-## Gateway — Alert Ingestion Routes (port 8081)
+## Gateway — Alert Ingestion Routes (port 8081, context-path `/pw/alertworker/gw`)
 
-### /api/v1 → `AlertController`
+### /gw/api/v1 → `AlertController`
 - `POST /alerts/prometheus` — Prometheus webhook format
 - `POST /alerts/json` — custom JSON format
 - `POST /channels/{id}/test` — channel connectivity test
@@ -60,7 +60,7 @@ All routes are `GET/POST/PUT/DELETE` standard CRUD unless noted.
 ### Middleware Chain
 ```
 Request → ApiKeyAuthFilter (Javax Filter, Order 1)
-            ├── skip if not /api/v1/alerts*
+            ├── skip if not /api/v1/alerts* (context-relative path within /gw)
             ├── validate X-API-Key header → ApiKeyMapper
             ├── rate limit check → RateLimiterService (token bucket)
             └── set request attribute "apiKeyId"

@@ -21,7 +21,11 @@ spring:
     baseline-on-migrate: true
 
 server:
-  port: 8080
+  port: 8083
+  # #AI-CODE-FUNCTION-dev_release/v0.0.1-20260908: module URL prefix so nginx/gateway can route by path
+  # 工程前缀 /pw/alertworker + 模块前缀 /dm，完整路径 /pw/alertworker/dm/api/v1/**
+  servlet:
+    context-path: /pw/alertworker/dm
 
 
 mybatis-plus:

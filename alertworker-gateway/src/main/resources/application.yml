@@ -17,12 +17,16 @@ spring:
         file-extension: yaml
   # #AI-CODE-CLASS-dev_release/v0.0.1-20260804: datasource moved to nacos shared-config.yaml
   flyway:
-    enabled: false
+    enabled: true
     locations: classpath:db/migration
     baseline-on-migrate: true
 
 server:
   port: 8081
+  # #AI-CODE-FUNCTION-dev_release/v0.0.1-20260908: module URL prefix so nginx can route by path
+  # 工程前缀 /pw/alertworker + 模块前缀 /gw，完整路径 /pw/alertworker/gw/api/v1/**
+  servlet:
+    context-path: /pw/alertworker/gw
 
 mybatis-plus:
   configuration:

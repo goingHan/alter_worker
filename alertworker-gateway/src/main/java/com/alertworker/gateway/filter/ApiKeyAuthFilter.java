@@ -33,7 +33,9 @@ public class ApiKeyAuthFilter implements Filter {
         HttpServletRequest httpRequest = (HttpServletRequest) request;
         HttpServletResponse httpResponse = (HttpServletResponse) response;
 
-        String path = httpRequest.getRequestURI();
+        // #AI-CODE-FUNCTION-dev_release/v0.0.1-20260915: use servlet path (without context path) so the
+        // /pw/alertworker/gw prefix added on 20260908 no longer bypasses API key validation
+        String path = httpRequest.getServletPath();
         if (!path.startsWith("/api/v1/alerts")) {
             chain.doFilter(request, response);
             return;

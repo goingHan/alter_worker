@@ -409,7 +409,7 @@ Expected: 日志出现 `Started WorkerApplication`、Tomcat 8082。
 - [ ] **Step 3: 校验 400 分支(不依赖 DB 数据)**
 
 ```bash
-curl -s -o /dev/null -w "%{http_code}" -X POST http://localhost:8082/api/v1/worker/dispatch \
+curl -s -o /dev/null -w "%{http_code}" -X POST http://localhost:8082/pw/alertworker/worker/api/v1/worker/dispatch \
   -H 'Content-Type: application/json' -d '{}'
 ```
 Expected: `400`。
@@ -418,7 +418,7 @@ Expected: `400`。
 
 ```bash
 MID=$(psql "postgresql://airflow:airflow@172.168.1.238:25432/alertworker" -tA -c "SELECT id FROM alert_message WHERE alert_rule_id=1 ORDER BY id DESC LIMIT 1")
-curl -s -X POST http://localhost:8082/api/v1/worker/dispatch \
+curl -s -X POST http://localhost:8082/pw/alertworker/worker/api/v1/worker/dispatch \
   -H 'Content-Type: application/json' \
   -d "{\"alertMessageId\":$MID,\"alertRuleId\":1,\"context\":{\"title\":\"CPU 过高\",\"content\":\"node-01 CPU > 90%\"},\"recipients\":[{\"assigneeId\":1,\"cnName\":\"张三\",\"channelType\":\"DINGDING\",\"messageChannelId\":1}]}"
 ```

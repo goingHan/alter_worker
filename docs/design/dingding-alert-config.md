@@ -7,10 +7,12 @@
 ## 告警链路总览
 
 ```
-外部系统 ──POST /api/v1/alerts/*──▶ Gateway（校验 API Key、匹配规则）
+外部系统 ──POST /pw/alertworker/gw/api/v1/alerts/*──▶ Gateway（校验 API Key、匹配规则）
         ──投递 RabbitMQ──▶ Worker（渲染模板、调用钉钉机器人 Webhook）
         ──▶ 钉钉群机器人 ──▶ 群成员收到告警
 ```
+
+> URL 前缀说明：完整 URL = **工程前缀 `/pw/alertworker`** + **模块前缀**（每个后端模块通过 `server.servlet.context-path` 自带——datamanager=`/dm`、gateway=`/gw`、worker=`/worker`）。
 
 收到一条钉钉告警，需要以下配置串联起来：
 
@@ -141,7 +143,7 @@
 ### 通过 API 创建（等价操作）
 
 ```bash
-curl -X POST http://localhost:8080/api/v1/channels \
+curl -X POST http://localhost:8083/pw/alertworker/dm/api/v1/channels \
   -H "Content-Type: application/json" \
   -d '{
     "name": "ops-dingding",
@@ -171,7 +173,7 @@ curl -X POST http://localhost:8080/api/v1/channels \
 ### API
 
 ```bash
-curl -X POST http://localhost:8080/api/v1/assignees \
+curl -X POST http://localhost:8083/pw/alertworker/dm/api/v1/assignees \
   -H "Content-Type: application/json" \
   -d '{
     "cnName": "Zhang San",
@@ -223,9 +225,10 @@ curl -X POST http://localhost:8080/api/v1/assignees \
 | 字段 | 说明 |
 |---|---|
 | Name | 模板名，如 `alert-dingding` |
-| Channel Type | 选择 `DingDing` |
 | Content | Jinjava 模板内容 |
 | Is Default | 是否作为默认模板（回退模板） |
+
+> 模板不绑定渠道：同一段模板内容可同时用于钉钉/邮件，具体渠道在「规则 → 关联消息模板」时指定（钉钉模板、邮件模板各选一个）。
 
 ### 模板内容示例（markdown）
 
@@ -241,7 +244,21 @@ curl -X POST http://localhost:8080/api/v1/assignees \
 
 可用变量为发送告警时传入的字段（如 `title`、`content`、`level`、`service_type`）以及接收人信息（`recipient.cn_name`）。
 
-> **默认模板**：当某规则没有为 `DINGDING` 配置专属模板时，会回退到默认模板。建议先创建一个 `channelType = DINGDING` 的默认模板，保证任何规则都能正常发送。
+### Prometheus 告警的模板变量与时间格式化
+
+`alertType = PROMETHEUS` 时，模板可使用 gateway 解析后的 Alertmanager 报文字段：
+`status`、`groupLabels.xxx`、`labels.xxx`（首条告警的 label）、`annotations.xxx`，以及用 `{% for alert in alerts %}` 遍历全部告警（`alert.labels.xxx`、`alert.annotations.xxx`、`alert.status`）。
+
+时间字段（`alert.startsAt`/`alert.endsAt`）是 ISO-8601 字符串，需用内置 `fmt_time` 过滤器转为北京时间，**不支持** Alertmanager 的 Go template 语法（`{{ range }}`、`.Labels.x`、`dateInZone` 等）：
+
+```jinjava
+**触发时间**：{{ alert.startsAt | fmt_time }}
+**恢复时间**：{{ alert.endsAt | fmt_time('yyyy-MM-dd HH:mm:ss') }}
+```
+
+`fmt_time` 第一个参数为格式（默认 `yyyy-MM-dd HH:mm:ss`），第二个参数为时区（默认 `Asia/Shanghai`）；输入无法解析时原样返回。
+
+> **默认模板**：当某规则没有配置专属模板时，会回退到默认模板。建议先创建一个默认模板，保证任何规则都能正常发送。
 
 ### 预览模板
 
@@ -271,7 +288,7 @@ curl -X POST http://localhost:8080/api/v1/assignees \
 | Match Key | 匹配字段：`PROMETHEUS` 用 label 名；`JSON` 用顶层 key 名 |
 | Match Value | 匹配值（可选，不填则匹配该字段任意值） |
 | Retry Max | 最大重试次数（默认 3） |
-| Retry Backoff | 重试退避，逗号分隔的秒数，如 `5,10,20` |
+| Retry Backoff | 失败重试退避，逗号分隔的秒数（带 `s` 后缀），如 `5s,10s,20s` |
 
 ### 2. 关联通讯组
 
@@ -316,12 +333,12 @@ curl -X POST http://localhost:8080/api/v1/assignees \
 
 ### 1. 通道测试
 
-在 **Message Channels** 列表点击某钉钉通道的 **Test** 按钮（或调用 `POST /api/v1/channels/{id}/test`）。成功时钉钉群会收到一条测试消息 `[AlertWorker] Channel test message`。
+在 **Message Channels** 列表点击某钉钉通道的 **Test** 按钮（或调用 `POST /pw/alertworker/gw/api/v1/channels/{id}/test`）。成功时钉钉群会收到一条测试消息 `[AlertWorker] Channel test message`。
 
 ### 2. 发送一条 JSON 告警
 
 ```bash
-curl -X POST http://localhost:8081/api/v1/alerts/json \
+curl -X POST http://localhost:8081/pw/alertworker/gw/api/v1/alerts/json \
   -H "X-API-Key: your-api-key-value" \
   -H "Content-Type: application/json" \
   -d '{
@@ -338,7 +355,7 @@ curl -X POST http://localhost:8081/api/v1/alerts/json \
 ### 3. 发送一条 Prometheus 告警
 
 ```bash
-curl -X POST http://localhost:8081/api/v1/alerts/prometheus \
+curl -X POST http://localhost:8081/pw/alertworker/gw/api/v1/alerts/prometheus \
   -H "X-API-Key: your-api-key-value" \
   -H "Content-Type: application/json" \
   -d '{
