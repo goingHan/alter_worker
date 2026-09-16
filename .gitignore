@@ -1,4 +1,14 @@
+### Java / Maven ###
 target/
+*.class
+*.jar
+*.war
+*.ear
+*.zip
+*.tar.gz
+*.rar
+hs_err_pid*
+replay_pid*
 !.mvn/wrapper/maven-wrapper.jar
 !**/src/main/**/target/
 !**/src/test/**/target/
@@ -8,21 +18,59 @@ target/
 *.iws
 *.iml
 *.ipr
-.claude
-.understand-anything
+out/
+*.hprof
 
 ### VS Code ###
 .vscode/
+*.code-workspace
 
-### Node ###
+### Eclipse ###
+.classpath
+.project
+.settings/
+.factorypath
+
+### Node / Vite ###
 node_modules/
 dist/
+dist-ssr/
+.vite/
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+pnpm-debug.log*
+*.tsbuildinfo
+.eslintcache
+
+### Logs ###
+logs/
 *.log
+
+### Local env & config ###
+.env
+.env.*
+!.env.example
+*.local.yml
+*.local.properties
 
 ### OS ###
 .DS_Store
 Thumbs.db
+desktop.ini
+$RECYCLE.BIN/
 
-### Local Config ###
-*.local.yml
-*.local.properties
+### Temp & backup ###
+*.bak
+*.swp
+*.tmp
+*~
+.idea_modules/
+
+### Crash dumps ###
+*.stackdump
+hs_err_pid*.log
+
+### Project-specific ###
+.claude
+.understand-anything
