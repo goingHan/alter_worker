@@ -2,8 +2,11 @@ package com.alertworker.datamanager.controller;
 
 import com.alertworker.common.entity.CommunicationGroup;
 import com.alertworker.common.entity.GroupAssignee;
+import com.alertworker.common.entity.RuleGroup;
+import com.alertworker.common.enums.ChannelType;
 import com.alertworker.common.mapper.CommunicationGroupMapper;
 import com.alertworker.common.mapper.GroupAssigneeMapper;
+import com.alertworker.common.mapper.RuleGroupMapper;
 import com.alertworker.common.service.AuditLogService;
 import com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper;
 import com.baomidou.mybatisplus.extension.plugins.pagination.Page;
@@ -20,6 +23,7 @@ public class CommunicationGroupController {
 
     private final CommunicationGroupMapper communicationGroupMapper;
     private final GroupAssigneeMapper groupAssigneeMapper;
+    private final RuleGroupMapper ruleGroupMapper;
     private final AuditLogService auditLogService;
 
     @GetMapping
@@ -51,6 +55,8 @@ public class CommunicationGroupController {
 
     @DeleteMapping("/{id}")
     public void delete(@PathVariable Long id) {
+        groupAssigneeMapper.physicalDeleteByGroupId(id);
+        ruleGroupMapper.delete(new LambdaQueryWrapper<RuleGroup>().eq(RuleGroup::getGroupId, id));
         communicationGroupMapper.deleteById(id);
         auditLogService.log("DELETE", "COMMUNICATION_GROUP", id, "admin", null);
     }
@@ -69,11 +75,12 @@ public class CommunicationGroupController {
     }
 
     @DeleteMapping("/{id}/assignees/{assigneeId}")
-    public void removeAssignee(@PathVariable Long id, @PathVariable Long assigneeId) {
-        groupAssigneeMapper.delete(
-                new LambdaQueryWrapper<GroupAssignee>()
-                        .eq(GroupAssignee::getGroupId, id)
-                        .eq(GroupAssignee::getAssigneeId, assigneeId)
-        );
+    public void removeAssignee(@PathVariable Long id, @PathVariable Long assigneeId,
+                               @RequestParam(required = false) ChannelType channelType) {
+        if (channelType != null) {
+            groupAssigneeMapper.physicalDeleteByGroupAssigneeChannel(id, assigneeId, channelType.name());
+        } else {
+            groupAssigneeMapper.physicalDeleteByGroupAndAssignee(id, assigneeId);
+        }
     }
 }

@@ -11,4 +11,5 @@ public class GroupAssigneeView {
     private String cnName;
     private String phone;
     private String dingdingUsername;
+    private String email;
 }

@@ -1,6 +1,8 @@
 package com.alertworker.datamanager.controller;
 
+import com.alertworker.common.entity.AlertRuleTemplate;
 import com.alertworker.common.entity.MessageTemplate;
+import com.alertworker.common.mapper.AlertRuleTemplateMapper;
 import com.alertworker.common.mapper.MessageTemplateMapper;
 import com.alertworker.common.service.AuditLogService;
 import com.alertworker.common.service.JinjavaTemplateService;
@@ -18,6 +20,7 @@ import java.util.Map;
 public class MessageTemplateController {
 
     private final MessageTemplateMapper messageTemplateMapper;
+    private final AlertRuleTemplateMapper alertRuleTemplateMapper;
     private final AuditLogService auditLogService;
     private final JinjavaTemplateService jinjavaTemplateService;
 
@@ -50,6 +53,8 @@ public class MessageTemplateController {
 
     @DeleteMapping("/{id}")
     public void delete(@PathVariable Long id) {
+        alertRuleTemplateMapper.delete(
+                new LambdaQueryWrapper<AlertRuleTemplate>().eq(AlertRuleTemplate::getTemplateId, id));
         messageTemplateMapper.deleteById(id);
         auditLogService.log("DELETE", "MESSAGE_TEMPLATE", id, "admin", null);
     }

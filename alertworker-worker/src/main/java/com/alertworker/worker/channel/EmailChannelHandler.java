@@ -28,7 +28,11 @@ public class EmailChannelHandler {
             String subject = config.get("subject") != null ? (String) config.get("subject") : "Alert Notification";
             String format = config.get("format") != null ? (String) config.get("format") : "plain";
 
-            String toEmail = recipient.getPhone(); // fallback
+            // #AI-CODE-FUNCTION-dev_release/v0.0.1-20260902: prefer assignee email, then phone, then testTo
+            String toEmail = recipient.getEmail();
+            if (toEmail == null || !toEmail.contains("@")) {
+                toEmail = recipient.getPhone();
+            }
             if (toEmail == null || !toEmail.contains("@")) {
                 toEmail = (String) config.get("testTo"); // for testing or fallback
             }

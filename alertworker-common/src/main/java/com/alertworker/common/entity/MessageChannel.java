@@ -18,4 +18,9 @@ public class MessageChannel extends BaseEntity {
     private ChannelType channelType;
 
     private String configJson;
+
+    private Long defaultTemplateId;
+
+    // #AI-CODE-FUNCTION-dev_release/v0.0.1-20260916: per-type default channel, used when a rule binds no channel explicitly
+    private Boolean isDefault;
 }

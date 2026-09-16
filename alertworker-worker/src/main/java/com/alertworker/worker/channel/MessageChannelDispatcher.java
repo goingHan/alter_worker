@@ -8,6 +8,8 @@ import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Component;
 
+import java.util.List;
+
 @Slf4j
 @Component
 @RequiredArgsConstructor
@@ -17,17 +19,29 @@ public class MessageChannelDispatcher {
     private final DingDingChannelHandler dingDingChannelHandler;
     private final EmailChannelHandler emailChannelHandler;
 
-    public boolean dispatch(AlertRecipient recipient, String renderedContent) {
-        MessageChannel channel = messageChannelMapper.selectById(recipient.getMessageChannelId());
+    // #AI-CODE-FUNCTION-dev_release/v0.0.1-20260907: batch all recipients sharing the same channel into a single call.
+    // Only messages spread across one channel (e.g. one DingDing robot) so recipients are @-ed together in a single message.
+    public boolean dispatch(List<AlertRecipient> recipients, String renderedContent) {
+        if (recipients == null || recipients.isEmpty()) {
+            log.warn("dispatch called with empty recipients");
+            return false;
+        }
+
+        Long channelId = recipients.get(0).getMessageChannelId();
+        MessageChannel channel = messageChannelMapper.selectById(channelId);
         if (channel == null || channel.getDeleted() == 1) {
-            log.error("Message channel not found or deleted: {}", recipient.getMessageChannelId());
+            log.error("Message channel not found or deleted: {}", channelId);
             return false;
         }
 
         if (channel.getChannelType() == ChannelType.DINGDING) {
-            return dingDingChannelHandler.send(channel, recipient, renderedContent);
+            return dingDingChannelHandler.send(channel, recipients, renderedContent);
         } else if (channel.getChannelType() == ChannelType.EMAIL) {
-            return emailChannelHandler.send(channel, recipient, renderedContent);
+            boolean allSuccess = true;
+            for (AlertRecipient recipient : recipients) {
+                allSuccess &= emailChannelHandler.send(channel, recipient, renderedContent);
+            }
+            return allSuccess;
         }
 
         log.error("Unsupported channel type: {}", channel.getChannelType());

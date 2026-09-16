@@ -49,8 +49,8 @@ AlertWorker is a transfer station that accepts alert messages and transfers them
 - **Message Template**: The template has many slots and fixed words.
    - Use **Jinjava** syntax (Jinja2-compatible for Java)
    - Includes required attributes and optional attributes
-   - Each template has a **channel_type** (`DINGDING` or `EMAIL`)
-   - There is a **default template** that can be used as fallback when no channel-specific template is configured
+   - Templates are **channel-agnostic** (`channel_type` is optional); the channel is decided when binding a template to a rule (`alert_rule_template.channel_type`)
+   - There is a **default template** that can be used as fallback when no rule-specific template is configured
 
 - **Alert Rule**: A toolchain that specifies the alert format type (prometheus or json), the template to be applied and the corresponding communication group.
    - Can configure multiple communication groups

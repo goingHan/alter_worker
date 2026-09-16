@@ -25,7 +25,7 @@ alert_message ──< dead_letter_message
 | `assignee` | ~dozens | phone, dingding_username, cn_name |
 | `communication_group` | ~dozens | name, send_type (ALL/serivice_type) |
 | `group_assignee` | junction | group_id + assignee_id + channel_type (unique), service_types (JSON) |
-| `message_template` | ~dozens | name, channel_type, content (Jinjava template), is_default |
+| `message_template` | ~dozens | name, channel_type (可选，渠道由规则绑定决定), content (Jinjava template), is_default |
 | `alert_rule` | ~dozens | name, alert_type, match_key, match_value, retry_max, retry_backoff |
 | `rule_group` | junction | rule_id + group_id (unique) |
 | `alert_rule_template` | junction | rule_id + channel_type (unique), template_id |

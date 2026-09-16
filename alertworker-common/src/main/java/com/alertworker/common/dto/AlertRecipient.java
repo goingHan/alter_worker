@@ -17,6 +17,7 @@ public class AlertRecipient implements Serializable {
     private String cnName;
     private String phone;
     private String dingdingUsername;
+    private String email;
     private ChannelType channelType;
     private Long messageChannelId;
 }
