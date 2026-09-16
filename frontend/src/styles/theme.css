@@ -1,0 +1,260 @@
+/* AlertWorker theme system
+ * 绿色忧伤 (green-sorrow, default): dark forest night, eye-protecting low-saturation greens,
+ * a touch of sorrow (muted blue-green haze) and a watchful glow (firefly accent).
+ */
+
+:root {
+  --aw-transition: 0.25s ease;
+}
+
+/* ============ 绿色忧伤 · 默认主题 ============ */
+html[data-theme='green-sorrow'] {
+  --aw-bg: #0d1914;
+  --aw-bg-deep: #0a130f;
+  --aw-panel: #13231c;
+  --aw-panel-hover: #172a21;
+  --aw-card: #16251d;
+  --aw-border: #22382c;
+  --aw-border-light: #1b2e24;
+  --aw-text: #cfe0d5;
+  --aw-text-secondary: #89a697;
+  --aw-text-faint: #5e7a6c;
+  --aw-primary: #4e8a6a;
+  --aw-primary-hover: #5f9d7c;
+  --aw-primary-active: #437a5d;
+  --aw-primary-glow: rgba(110, 180, 140, 0.45);
+  --aw-accent: #8fd0a8;
+  --aw-success: #6fb98a;
+  --aw-error: #d97a7a;
+  --aw-warning: #d0ae6e;
+  --aw-info: #7fb4c9;
+  --aw-header: rgba(13, 25, 20, 0.85);
+  --aw-sider: #0f1d17;
+  --aw-shadow: 0 2px 14px rgba(0, 0, 0, 0.35);
+  --aw-input-bg: #0e1b15;
+  --aw-input-border: #263d30;
+  --aw-table-stripe: rgba(255, 255, 255, 0.02);
+  --aw-menu-active: linear-gradient(90deg, rgba(78, 138, 106, 0.28), rgba(78, 138, 106, 0.05));
+  --aw-menu-active-bar: #7fbf9a;
+  --aw-scrollbar: #2c4537;
+}
+
+/* ============ 晨光 · 浅色主题 ============ */
+html[data-theme='dawn'] {
+  --aw-bg: #f6f9f7;
+  --aw-bg-deep: #eef4f0;
+  --aw-panel: #ffffff;
+  --aw-panel-hover: #f3f7f4;
+  --aw-card: #ffffff;
+  --aw-border: #dfe8e2;
+  --aw-border-light: #eaf0ec;
+  --aw-text: #2f3e36;
+  --aw-text-secondary: #7c8b82;
+  --aw-text-faint: #a8b5ad;
+  --aw-primary: #3f7d5d;
+  --aw-primary-hover: #4c8f6d;
+  --aw-primary-active: #356c4f;
+  --aw-primary-glow: rgba(63, 125, 93, 0.25);
+  --aw-accent: #3f7d5d;
+  --aw-success: #2f9e6c;
+  --aw-error: #d9534f;
+  --aw-warning: #d9a441;
+  --aw-info: #3b8dbd;
+  --aw-header: rgba(255, 255, 255, 0.92);
+  --aw-sider: #ffffff;
+  --aw-shadow: 0 2px 12px rgba(31, 61, 45, 0.08);
+  --aw-input-bg: #ffffff;
+  --aw-input-border: #cfddd5;
+  --aw-table-stripe: rgba(63, 125, 93, 0.03);
+  --aw-menu-active: linear-gradient(90deg, rgba(63, 125, 93, 0.12), rgba(63, 125, 93, 0.02));
+  --aw-menu-active-bar: #3f7d5d;
+  --aw-scrollbar: #c4d3ca;
+}
+
+/* ============ 子夜 · 深蓝主题 ============ */
+html[data-theme='midnight'] {
+  --aw-bg: #0f1420;
+  --aw-bg-deep: #0b0f18;
+  --aw-panel: #161d2d;
+  --aw-panel-hover: #1b2436;
+  --aw-card: #182032;
+  --aw-border: #26324a;
+  --aw-border-light: #1f2940;
+  --aw-text: #d6deeb;
+  --aw-text-secondary: #8b97ab;
+  --aw-text-faint: #5d6a80;
+  --aw-primary: #4a7bd4;
+  --aw-primary-hover: #5d8ce0;
+  --aw-primary-active: #406cc0;
+  --aw-primary-glow: rgba(92, 140, 224, 0.4);
+  --aw-accent: #8ab4f5;
+  --aw-success: #58c28c;
+  --aw-error: #e07777;
+  --aw-warning: #d9b15c;
+  --aw-info: #6fb0dd;
+  --aw-header: rgba(15, 20, 32, 0.88);
+  --aw-sider: #121827;
+  --aw-shadow: 0 2px 14px rgba(0, 0, 0, 0.4);
+  --aw-input-bg: #101623;
+  --aw-input-border: #2b3952;
+  --aw-table-stripe: rgba(255, 255, 255, 0.02);
+  --aw-menu-active: linear-gradient(90deg, rgba(74, 123, 212, 0.28), rgba(74, 123, 212, 0.05));
+  --aw-menu-active-bar: #7fa9ec;
+  --aw-scrollbar: #2c3a55;
+}
+
+/* ============ 全局基础 ============ */
+html, body {
+  margin: 0;
+  padding: 0;
+  background: var(--aw-bg);
+  color: var(--aw-text);
+  font-family: 'Segoe UI', 'PingFang SC', 'Microsoft YaHei', -apple-system, sans-serif;
+  transition: background var(--aw-transition), color var(--aw-transition);
+}
+
+* {
+  scrollbar-width: thin;
+  scrollbar-color: var(--aw-scrollbar) transparent;
+}
+*::-webkit-scrollbar { width: 8px; height: 8px; }
+*::-webkit-scrollbar-thumb { background: var(--aw-scrollbar); border-radius: 4px; }
+*::-webkit-scrollbar-track { background: transparent; }
+
+/* ============ view-ui-plus 组件主题覆盖 ============ */
+/* 卡片 */
+.ivu-card {
+  background: var(--aw-card);
+  border: 1px solid var(--aw-border);
+  border-radius: 12px;
+  box-shadow: var(--aw-shadow);
+  color: var(--aw-text);
+  transition: background var(--aw-transition), border-color var(--aw-transition);
+}
+.ivu-card-head {
+  border-bottom: 1px solid var(--aw-border);
+  color: var(--aw-text);
+}
+.ivu-card-head p, .ivu-card-head-inner { color: var(--aw-text); }
+
+/* 按钮 */
+.ivu-btn { border-color: var(--aw-border); background: var(--aw-panel); color: var(--aw-text); }
+.ivu-btn:hover { border-color: var(--aw-primary); color: var(--aw-accent); }
+.ivu-btn-primary { background: var(--aw-primary); border-color: var(--aw-primary); color: #eafff2; }
+.ivu-btn-primary:hover { background: var(--aw-primary-hover); border-color: var(--aw-primary-hover); color: #eafff2; }
+.ivu-btn-primary:active { background: var(--aw-primary-active); }
+.ivu-btn-text { color: var(--aw-text-secondary); }
+.ivu-btn-text:hover { color: var(--aw-accent); }
+
+/* 表格 */
+.ivu-table { background: transparent; color: var(--aw-text); }
+.ivu-table th { background: var(--aw-panel); color: var(--aw-text-secondary); border-bottom: 1px solid var(--aw-border); }
+.ivu-table td { background: var(--aw-card); color: var(--aw-text); border-bottom: 1px solid var(--aw-border-light); }
+.ivu-table th, .ivu-table td { white-space: nowrap; }
+.ivu-table-stripe .ivu-table-body tr:nth-child(2n) td,
+.ivu-table-stripe .ivu-table-fixed-body tr:nth-child(2n) td { background: var(--aw-table-stripe); }
+.ivu-table-row-hover td, .ivu-table tbody tr:hover td { background: var(--aw-panel-hover); }
+.ivu-table::before, .ivu-table::after { background-color: var(--aw-border); }
+
+/* 输入框 */
+.ivu-input, .ivu-select-selection, .ivu-input-number {
+  background: var(--aw-input-bg);
+  border: 1px solid var(--aw-input-border);
+  color: var(--aw-text);
+}
+.ivu-input:focus, .ivu-input:hover, .ivu-select-selection:hover { border-color: var(--aw-primary); }
+.ivu-input::placeholder { color: var(--aw-text-faint); }
+.ivu-select-dropdown, .ivu-dropdown-menu, .ivu-select-item {
+  background: var(--aw-panel);
+  color: var(--aw-text);
+  border-color: var(--aw-border);
+}
+.ivu-select-item:hover { background: var(--aw-panel-hover); }
+.ivu-select-item-selected, .ivu-select-item-selected:hover { color: var(--aw-accent); }
+.ivu-input-number-handler { background: var(--aw-panel); color: var(--aw-text-secondary); border-color: var(--aw-input-border); }
+.ivu-input-number-handler:hover { color: var(--aw-accent); }
+
+/* 弹窗 */
+.ivu-modal-content { background: var(--aw-panel); border-radius: 12px; }
+.ivu-modal-header { border-bottom: 1px solid var(--aw-border); }
+.ivu-modal-header p, .ivu-modal-header-inner { color: var(--aw-text); }
+.ivu-modal-body { color: var(--aw-text); }
+.ivu-modal-footer { border-top: 1px solid var(--aw-border); }
+.ivu-modal-close .ivu-icon-ios-close { color: var(--aw-text-secondary); }
+
+/* 分页 */
+.ivu-page-item, .ivu-page-prev, .ivu-page-next { background: var(--aw-panel); border-color: var(--aw-border); }
+.ivu-page-item a { color: var(--aw-text-secondary); }
+.ivu-page-item-active { background: var(--aw-primary); border-color: var(--aw-primary); }
+.ivu-page-item-active a, .ivu-page-item-active:hover a { color: #eafff2; }
+.ivu-page-item:hover { border-color: var(--aw-primary); }
+.ivu-page-item:hover a { color: var(--aw-accent); }
+.ivu-page-options-elevator input { background: var(--aw-input-bg); border-color: var(--aw-input-border); color: var(--aw-text); }
+
+/* 标签 */
+.ivu-tag { border: none; background: var(--aw-panel-hover); color: var(--aw-text-secondary); }
+.ivu-tag-green { background: rgba(110, 185, 138, 0.16); color: var(--aw-success); }
+.ivu-tag-red { background: rgba(217, 122, 122, 0.16); color: var(--aw-error); }
+.ivu-tag-orange { background: rgba(208, 174, 110, 0.16); color: var(--aw-warning); }
+.ivu-tag-blue { background: rgba(127, 180, 201, 0.16); color: var(--aw-info); }
+
+/* Tabs */
+.ivu-tabs-bar { border-bottom: 1px solid var(--aw-border); }
+.ivu-tabs-tab { color: var(--aw-text-secondary); }
+.ivu-tabs-tab:hover { color: var(--aw-accent); }
+.ivu-tabs-tab-active { color: var(--aw-accent); }
+.ivu-tabs-ink-bar { background-color: var(--aw-primary); }
+
+/* 菜单（view-ui-plus Menu） */
+.ivu-menu { color: var(--aw-text); background: transparent; }
+.ivu-menu-light { background: transparent; }
+.ivu-menu-item, .ivu-menu-submenu-title {
+  color: var(--aw-text-secondary);
+  transition: all var(--aw-transition);
+}
+.ivu-menu-light.ivu-menu-vertical .ivu-menu-item { color: var(--aw-text-secondary); }
+.ivu-menu-light.ivu-menu-vertical .ivu-menu-item:hover { color: var(--aw-accent); }
+.ivu-menu-light.ivu-menu-vertical .ivu-menu-item-active:not(.ivu-menu-submenu) {
+  background: var(--aw-menu-active);
+  color: var(--aw-accent);
+}
+.ivu-menu-light.ivu-menu-vertical .ivu-menu-item-active:not(.ivu-menu-submenu)::after {
+  content: '';
+  position: absolute;
+  left: 0; top: 12%;
+  width: 3px; height: 76%;
+  background: var(--aw-menu-active-bar);
+  border-radius: 0 3px 3px 0;
+}
+.ivu-menu-light.ivu-menu-vertical .ivu-menu-submenu-title:hover { color: var(--aw-accent); }
+.ivu-menu-light.ivu-menu-vertical .ivu-menu-item-group-title { color: var(--aw-text-faint); }
+
+/* Switch */
+.ivu-switch { background: var(--aw-input-border); }
+.ivu-switch-checked { background: var(--aw-primary); border-color: var(--aw-primary); }
+
+/* Spin */
+.ivu-spin-fix { background-color: rgba(0, 0, 0, 0.35); }
+
+/* 提示 */
+.ivu-message-notice-content, .ivu-notice-notice { background: var(--aw-panel); color: var(--aw-text); }
+
+/* 工具提示 */
+.ivu-tooltip-inner { background: var(--aw-panel-hover); color: var(--aw-text); white-space: pre-wrap; word-break: break-all; }
+.ivu-tooltip-popper[x-placement^='top'] .ivu-tooltip-arrow { border-top-color: var(--aw-panel-hover); }
+
+/* #AI-CODE-FUNCTION-dev_release/v0.0.1-20260916: 页面隐藏（最小化/遮挡）时暂停全部 CSS 动画，
+   让合成器彻底空闲——常驻动画层会干扰 Edge 的最小化动画导致窗口弹回 */
+.page-hidden *,
+.page-hidden *::before,
+.page-hidden *::after {
+  animation-play-state: paused !important;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  *, *::before, *::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+  }
+}

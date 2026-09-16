@@ -110,6 +110,7 @@ Sub-statuses:
 - Display real-time alert history (via SSE)
 - Display delivery logs with full status trace
 - Failed message dashboard with inspect/retry dead-letter capability
+- **CodeMap**: 定位前端页面问题先看 `docs/design/codemap/frontend-codemap.md`（页面→文件→行号、症状→定位指南、已知问题清单），不要全量扫描代码
 
 ### JAVA Dictionary
 
