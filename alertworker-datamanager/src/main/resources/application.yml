@@ -27,6 +27,18 @@ server:
   servlet:
     context-path: /pw/alertworker/dm
 
+# datamanager admin API auth: all /api/v1/** require X-Admin-Token header (or ?token= for SSE).
+# Override via env DATAMANAGER_ADMIN_TOKEN; leave blank to disable auth (dev only).
+alertworker:
+  datamanager:
+    admin-token: ${DATAMANAGER_ADMIN_TOKEN:alertworker-admin-2026}
+  # login (POST /api/v1/auth/login) issues signed tokens; the static admin-token above keeps working as fallback
+  auth:
+    username: ${ADMIN_USERNAME:admin}
+    password: ${ADMIN_PASSWORD:admin123}
+    secret: ${ADMIN_AUTH_SECRET:alertworker-auth-secret-2026}
+    expires-hours: ${ADMIN_AUTH_EXPIRES_HOURS:12}
+
 
 mybatis-plus:
   configuration:
