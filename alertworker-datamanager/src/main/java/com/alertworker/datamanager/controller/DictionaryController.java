@@ -5,6 +5,7 @@ import com.alertworker.common.mapper.DictionaryMapper;
 import com.alertworker.common.service.AuditLogService;
 import com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper;
 import com.baomidou.mybatisplus.extension.plugins.pagination.Page;
+import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
 import org.springframework.web.bind.annotation.*;
 
@@ -39,14 +40,14 @@ public class DictionaryController {
     }
 
     @PostMapping
-    public Dictionary create(@RequestBody Dictionary entity) {
+    public Dictionary create(@Valid @RequestBody Dictionary entity) {
         dictionaryMapper.insert(entity);
         auditLogService.log("CREATE", "DICTIONARY", entity.getId(), "admin", null);
         return entity;
     }
 
     @PutMapping("/{id}")
-    public Dictionary update(@PathVariable Long id, @RequestBody Dictionary entity) {
+    public Dictionary update(@PathVariable Long id, @Valid @RequestBody Dictionary entity) {
         entity.setId(id);
         dictionaryMapper.updateById(entity);
         auditLogService.log("UPDATE", "DICTIONARY", id, "admin", null);

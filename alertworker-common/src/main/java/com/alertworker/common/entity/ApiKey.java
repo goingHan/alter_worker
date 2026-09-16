@@ -16,7 +16,6 @@ public class ApiKey extends BaseEntity {
     @Size(max = 100, message = "Name must be at most 100 characters")
     private String name;
 
-    @NotBlank(message = "API value is required")
     private String apiValue;
 
     @Min(value = 1, message = "Rate limit must be at least 1")
