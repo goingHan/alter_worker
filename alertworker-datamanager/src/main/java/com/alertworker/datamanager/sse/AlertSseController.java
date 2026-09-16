@@ -55,6 +55,7 @@ public class AlertSseController {
                 );
                 if (!newMessages.isEmpty()) {
                     lastCheck = newMessages.get(0).getCreatedAt();
+                    newMessages.forEach(m -> m.setRawPayload(null));
                     String json = objectMapper.writeValueAsString(newMessages);
                     for (SseEmitter emitter : emitters) {
                         try {

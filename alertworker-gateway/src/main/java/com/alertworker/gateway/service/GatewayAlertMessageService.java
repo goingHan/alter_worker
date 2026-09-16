@@ -23,15 +23,20 @@ public class GatewayAlertMessageService {
     private final AuditLogService auditLogService;
     private final ObjectMapper objectMapper;
 
-    public AlertMessage create(Long apiKeyId, Long alertRuleId, Map<String, Object> context) {
+    public AlertMessage create(Long apiKeyId, Long alertRuleId, Map<String, Object> context,
+                               String messageNo, String rawPayload, String channelNames) {
         try {
             String payload = objectMapper.writeValueAsString(context);
             AlertMessage message = new AlertMessage();
+            message.setMessageNo(messageNo);
             message.setApiKeyId(apiKeyId);
             message.setAlertRuleId(alertRuleId);
             message.setPayload(payload);
+            message.setRawPayload(rawPayload);
+            message.setChannelNames(channelNames);
             message.setStatus(MessageStatus.recieved);
             message.setRetryCount(0);
+            message.setReceivedAt(LocalDateTime.now());
             alertMessageMapper.insert(message);
             return message;
         } catch (Exception e) {
@@ -41,7 +46,12 @@ public class GatewayAlertMessageService {
     }
 
     public void transitionToGwSent(Long messageId) {
-        updateStatus(messageId, MessageStatus.GW_SENT, null);
+        alertMessageMapper.update(null, new LambdaUpdateWrapper<AlertMessage>()
+                .eq(AlertMessage::getId, messageId)
+                .set(AlertMessage::getStatus, MessageStatus.GW_SENT)
+                .set(AlertMessage::getGwSentAt, LocalDateTime.now())
+                .set(AlertMessage::getUpdatedAt, LocalDateTime.now())
+                .setSql("sub_status = NULL"));
         auditLogService.logEvent("GW_SENT", "Message " + messageId + " sent to RabbitMQ");
     }
 
@@ -54,7 +64,8 @@ public class GatewayAlertMessageService {
         LambdaUpdateWrapper<AlertMessage> wrapper = new LambdaUpdateWrapper<AlertMessage>()
                 .eq(AlertMessage::getId, messageId)
                 .set(AlertMessage::getStatus, status)
-                .set(AlertMessage::getUpdatedAt, LocalDateTime.now());
+                .set(AlertMessage::getUpdatedAt, LocalDateTime.now())
+                .set(AlertMessage::getFinishedAt, LocalDateTime.now());
         if (subStatus != null) {
             wrapper.set(AlertMessage::getSubStatus, subStatus);
         } else {

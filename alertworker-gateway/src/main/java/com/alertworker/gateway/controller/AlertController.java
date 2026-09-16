@@ -1,17 +1,15 @@
 package com.alertworker.gateway.controller;
 
-import com.alertworker.common.dto.AlertMessagePayload;
 import com.alertworker.common.entity.AlertMessage;
 import com.alertworker.common.entity.AlertRule;
+import com.alertworker.common.entity.DeadLetterMessage;
 import com.alertworker.common.enums.AlertType;
-import com.alertworker.common.enums.MessageSubStatus;
-import com.alertworker.gateway.dto.ParsedAlert;
-import com.alertworker.gateway.parser.JsonAlertParser;
-import com.alertworker.gateway.parser.PrometheusAlertParser;
-import com.alertworker.gateway.rabbitmq.AlertMessageProducer;
-import com.alertworker.gateway.service.AlertRuleMatcher;
-import com.alertworker.gateway.service.GatewayAlertMessageService;
-import com.alertworker.gateway.service.MessageBuilder;
+import com.alertworker.common.mapper.AlertMessageMapper;
+import com.alertworker.common.mapper.AlertRuleMapper;
+import com.alertworker.common.mapper.DeadLetterMessageMapper;
+import com.alertworker.common.util.MessageNoGenerator;
+import com.alertworker.gateway.service.AlertIngestService;
+import com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper;
 import jakarta.servlet.http.HttpServletRequest;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
@@ -28,12 +26,10 @@ import java.util.Map;
 @RequiredArgsConstructor
 public class AlertController {
 
-    private final PrometheusAlertParser prometheusAlertParser;
-    private final JsonAlertParser jsonAlertParser;
-    private final AlertRuleMatcher alertRuleMatcher;
-    private final MessageBuilder messageBuilder;
-    private final AlertMessageProducer alertMessageProducer;
-    private final GatewayAlertMessageService gatewayAlertMessageService;
+    private final AlertIngestService alertIngestService;
+    private final AlertRuleMapper alertRuleMapper;
+    private final AlertMessageMapper alertMessageMapper;
+    private final DeadLetterMessageMapper deadLetterMessageMapper;
 
     @PostMapping("/alerts/prometheus")
     public ResponseEntity<?> receivePrometheusAlert(HttpServletRequest request) {
@@ -45,41 +41,70 @@ public class AlertController {
         return handleAlert(request, AlertType.JSON);
     }
 
+    // #AI-CODE-FUNCTION-dev_release/v0.0.1-20260901: retry a dead-letter message by re-running the ingest pipeline on the stored raw payload
+    @PostMapping("/alerts/dead-letters/{id}/retry")
+    public ResponseEntity<?> retryDeadLetter(@PathVariable Long id) {
+        DeadLetterMessage deadLetter = deadLetterMessageMapper.selectById(id);
+        if (deadLetter == null) {
+            return ResponseEntity.status(404).body(Map.of("error", "Dead letter not found"));
+        }
+        AlertMessage original = alertMessageMapper.selectById(deadLetter.getAlertMessageId());
+        if (original == null || original.getRawPayload() == null || original.getRawPayload().isBlank()) {
+            return ResponseEntity.status(404).body(Map.of("error", "Original alert or raw payload not found"));
+        }
+        AlertType alertType = resolveAlertType(original.getAlertRuleId(), original.getRawPayload());
+        ResponseEntity<?> response = toResponse(alertIngestService.ingest(
+                original.getApiKeyId(), alertType, original.getRawPayload(), MessageNoGenerator.generate(), null, null));
+        if (response.getStatusCode().is2xxSuccessful()) {
+            deadLetterMessageMapper.deleteById(id);
+            log.info("Dead letter {} retried successfully", id);
+        }
+        return response;
+    }
+
+    @PostMapping("/alerts/dead-letters/retry-by-message/{alertMessageId}")
+    public ResponseEntity<?> retryDeadLetterByMessage(@PathVariable Long alertMessageId) {
+        DeadLetterMessage deadLetter = deadLetterMessageMapper.selectOne(
+                new LambdaQueryWrapper<DeadLetterMessage>()
+                        .eq(DeadLetterMessage::getAlertMessageId, alertMessageId)
+                        .last("LIMIT 1")
+        );
+        if (deadLetter == null) {
+            return ResponseEntity.status(404).body(Map.of("error", "Dead letter not found"));
+        }
+        return retryDeadLetter(deadLetter.getId());
+    }
+
+    private AlertType resolveAlertType(Long alertRuleId, String rawPayload) {
+        if (alertRuleId != null) {
+            AlertRule rule = alertRuleMapper.selectById(alertRuleId);
+            if (rule != null && rule.getAlertType() != null) {
+                return rule.getAlertType();
+            }
+        }
+        return (rawPayload != null && rawPayload.contains("labels")) ? AlertType.PROMETHEUS : AlertType.JSON;
+    }
+
     private ResponseEntity<?> handleAlert(HttpServletRequest request, AlertType alertType) {
         Long apiKeyId = (Long) request.getAttribute("apiKeyId");
-        String payload = readBody(request);
+        String rawPayload = readBody(request);
+        return toResponse(alertIngestService.ingest(
+                apiKeyId, alertType, rawPayload, MessageNoGenerator.generate(), null, null));
+    }
 
-        try {
-            ParsedAlert parsedAlert = alertType == AlertType.PROMETHEUS
-                    ? prometheusAlertParser.parse(payload)
-                    : jsonAlertParser.parse(payload);
-
-            AlertRule rule = alertRuleMatcher.match(parsedAlert, alertType);
-            if (rule == null) {
-                log.warn("No matching alert rule found for {} alert", alertType);
-                AlertMessage msg = gatewayAlertMessageService.create(apiKeyId, null, parsedAlert.getContext());
-                gatewayAlertMessageService.transitionToFailed(msg.getId(), MessageSubStatus.gw_failed, "No matching alert rule");
-                return ResponseEntity.badRequest().body(Map.of("error", "No matching alert rule"));
-            }
-
-            AlertMessage message = gatewayAlertMessageService.create(apiKeyId, rule.getId(), parsedAlert.getContext());
-            AlertMessagePayload mqPayload = messageBuilder.build(rule, parsedAlert);
-            mqPayload.setAlertMessageId(message.getId());
-
-            alertMessageProducer.send(mqPayload);
-            gatewayAlertMessageService.transitionToGwSent(message.getId());
-
-            Map<String, Object> result = new HashMap<>();
-            result.put("messageId", message.getId());
-            result.put("status", "GW_SENT");
-            result.put("recipientCount", mqPayload.getRecipients().size());
-            return ResponseEntity.ok(result);
-        } catch (Exception e) {
-            log.error("Failed to handle {} alert", alertType, e);
-            AlertMessage msg = gatewayAlertMessageService.create(apiKeyId, null, Map.of("rawPayload", payload, "error", e.getMessage()));
-            gatewayAlertMessageService.transitionToFailed(msg.getId(), MessageSubStatus.gw_failed, e.getMessage());
-            return ResponseEntity.internalServerError().body(Map.of("error", e.getMessage()));
+    private ResponseEntity<?> toResponse(AlertIngestService.IngestResult result) {
+        if (result.success()) {
+            Map<String, Object> body = new HashMap<>();
+            body.put("messageId", result.messageNo());
+            body.put("recordId", result.recordId());
+            body.put("status", "GW_SENT");
+            body.put("recipientCount", result.recipientCount());
+            return ResponseEntity.ok(body);
         }
+        Map<String, Object> body = new HashMap<>();
+        body.put("error", result.error());
+        body.put("messageId", result.messageNo());
+        return ResponseEntity.status(result.status()).body(body);
     }
 
     private String readBody(HttpServletRequest request) {

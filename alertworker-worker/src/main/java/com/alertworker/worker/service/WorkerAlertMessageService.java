@@ -27,22 +27,38 @@ public class WorkerAlertMessageService {
     @Transactional
     public void transitionToDelivered(Long messageId) {
         updateStatus(messageId, MessageStatus.DELIVERED, null);
+        alertMessageMapper.update(null, new LambdaUpdateWrapper<AlertMessage>()
+                .eq(AlertMessage::getId, messageId)
+                .set(AlertMessage::getWorkerReceivedAt, LocalDateTime.now())
+                .set(AlertMessage::getUpdatedAt, LocalDateTime.now()));
     }
 
     @Transactional
     public void transitionToWorkerSent(Long messageId) {
         updateStatus(messageId, MessageStatus.WORKER_SENT, null);
+        alertMessageMapper.update(null, new LambdaUpdateWrapper<AlertMessage>()
+                .eq(AlertMessage::getId, messageId)
+                .set(AlertMessage::getWorkerSentAt, LocalDateTime.now())
+                .set(AlertMessage::getUpdatedAt, LocalDateTime.now()));
     }
 
     @Transactional
     public void transitionToSuccess(Long messageId) {
         updateStatus(messageId, MessageStatus.success, null);
+        alertMessageMapper.update(null, new LambdaUpdateWrapper<AlertMessage>()
+                .eq(AlertMessage::getId, messageId)
+                .set(AlertMessage::getFinishedAt, LocalDateTime.now())
+                .set(AlertMessage::getUpdatedAt, LocalDateTime.now()));
         auditLogService.logEvent("MESSAGE_SUCCESS", "Message " + messageId + " delivered successfully");
     }
 
     @Transactional
     public void transitionToFailed(Long messageId, MessageSubStatus subStatus, String reason) {
         updateStatus(messageId, MessageStatus.FAILED, subStatus);
+        alertMessageMapper.update(null, new LambdaUpdateWrapper<AlertMessage>()
+                .eq(AlertMessage::getId, messageId)
+                .set(AlertMessage::getFinishedAt, LocalDateTime.now())
+                .set(AlertMessage::getUpdatedAt, LocalDateTime.now()));
         auditLogService.logEvent("WORKER_FAILED", "Message " + messageId + " failed: " + reason);
     }
 

@@ -20,6 +20,7 @@
 --   group_assignee          通讯组↔接收人关联(含 channel_type 通知方式 + service_types 过滤)
 --   message_channel         消息通道(钉钉/邮件, config_json 存 webhook/SMTP 配置)
 --   message_template        消息模板(Jinjava 语法, channel_type + is_default 兜底)
+--   node_registry           节点注册表(gateway/worker 心跳上报、停用/权重管理)
 --   rule_group              规则↔通讯组关联
 -- ============================================================================
 
@@ -27,16 +28,23 @@
 -- Table: alert_message
 -- ----------------------------------------------------------------------------
 CREATE TABLE alert_message (
-    id             BIGSERIAL   NOT NULL,
-    api_key_id     BIGINT      NOT NULL,
-    alert_rule_id  BIGINT,
-    payload        TEXT        NOT NULL,
-    status         VARCHAR(32) NOT NULL,
-    sub_status     VARCHAR(32),
-    retry_count    INTEGER     NOT NULL DEFAULT 0,
-    created_at     TIMESTAMP   NOT NULL DEFAULT CURRENT_TIMESTAMP,
-    updated_at     TIMESTAMP   NOT NULL DEFAULT CURRENT_TIMESTAMP,
-    deleted        SMALLINT    NOT NULL DEFAULT 0,
+    id                 BIGSERIAL   NOT NULL,
+    message_no         VARCHAR(64),
+    api_key_id         BIGINT      NOT NULL,
+    alert_rule_id      BIGINT,
+    payload            TEXT        NOT NULL,
+    raw_payload        TEXT,
+    status             VARCHAR(32) NOT NULL,
+    sub_status         VARCHAR(32),
+    retry_count        INTEGER     NOT NULL DEFAULT 0,
+    received_at        TIMESTAMP,
+    gw_sent_at         TIMESTAMP,
+    worker_received_at TIMESTAMP,
+    worker_sent_at     TIMESTAMP,
+    finished_at        TIMESTAMP,
+    created_at         TIMESTAMP   NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    updated_at         TIMESTAMP   NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    deleted            SMALLINT    NOT NULL DEFAULT 0,
     PRIMARY KEY (id)
 );
 
@@ -211,6 +219,24 @@ CREATE TABLE message_template (
 );
 
 -- ----------------------------------------------------------------------------
+-- Table: node_registry
+-- ----------------------------------------------------------------------------
+CREATE TABLE node_registry (
+    id                BIGSERIAL   NOT NULL,
+    node_id           VARCHAR(128) NOT NULL,
+    node_type         VARCHAR(32)  NOT NULL,
+    host              VARCHAR(128),
+    port              INTEGER,
+    status            VARCHAR(32)  NOT NULL DEFAULT 'ENABLED',
+    weight            INTEGER      NOT NULL DEFAULT 1,
+    last_heartbeat_at TIMESTAMP,
+    created_at        TIMESTAMP    NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    updated_at        TIMESTAMP    NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    deleted           SMALLINT     NOT NULL DEFAULT 0,
+    PRIMARY KEY (id)
+);
+
+-- ----------------------------------------------------------------------------
 -- Table: rule_group
 -- ----------------------------------------------------------------------------
 CREATE TABLE rule_group (
@@ -254,6 +280,8 @@ ALTER TABLE dead_letter_message
     ADD CONSTRAINT dead_letter_message_alert_message_id_key UNIQUE (alert_message_id);
 ALTER TABLE dictionary
     ADD CONSTRAINT uk_dictionary_type_key UNIQUE (dict_type, dict_key);
+ALTER TABLE node_registry
+    ADD CONSTRAINT uk_node_registry_node_id UNIQUE (node_id);
 ALTER TABLE group_assignee
     ADD CONSTRAINT uk_group_assignee UNIQUE (group_id, assignee_id, channel_type);
 ALTER TABLE rule_group
@@ -264,6 +292,7 @@ ALTER TABLE rule_group
 -- ----------------------------------------------------------------------------
 CREATE INDEX idx_alert_message_api_key_id   ON alert_message USING btree (api_key_id);
 CREATE INDEX idx_alert_message_created_at   ON alert_message USING btree (created_at);
+CREATE INDEX idx_alert_message_received_at  ON alert_message USING btree (received_at);
 CREATE INDEX idx_alert_message_status       ON alert_message USING btree (status);
 CREATE INDEX idx_alert_rule_alert_type      ON alert_rule USING btree (alert_type);
 CREATE INDEX idx_alert_rule_template_rule_id ON alert_rule_template USING btree (rule_id);
@@ -272,5 +301,8 @@ CREATE INDEX idx_audit_log_entity           ON audit_log USING btree (entity_typ
 CREATE INDEX idx_group_assignee_assignee_id ON group_assignee USING btree (assignee_id);
 CREATE INDEX idx_group_assignee_group_id    ON group_assignee USING btree (group_id);
 CREATE INDEX idx_message_template_channel_type ON message_template USING btree (channel_type);
+CREATE INDEX idx_node_registry_heartbeat    ON node_registry USING btree (last_heartbeat_at);
+CREATE INDEX idx_node_registry_type         ON node_registry USING btree (node_type);
 CREATE INDEX idx_rule_group_group_id        ON rule_group USING btree (group_id);
 CREATE INDEX idx_rule_group_rule_id         ON rule_group USING btree (rule_id);
+CREATE UNIQUE INDEX uk_alert_message_no     ON alert_message USING btree (message_no);

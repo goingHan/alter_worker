@@ -15,6 +15,7 @@ import java.util.Map;
 @AllArgsConstructor
 public class AlertMessagePayload implements Serializable {
     private Long alertMessageId;
+    private String messageNo;
     private Long alertRuleId;
     private Map<String, Object> context;
     private List<AlertRecipient> recipients;
