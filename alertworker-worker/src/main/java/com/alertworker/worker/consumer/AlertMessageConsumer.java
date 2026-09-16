@@ -1,6 +1,7 @@
 package com.alertworker.worker.consumer;
 
 import com.alertworker.common.dto.AlertMessagePayload;
+import com.alertworker.common.service.NodeHeartbeatService;
 import com.alertworker.worker.service.AlertMessageProcessor;
 import com.alertworker.worker.service.ProcessingResult;
 import com.rabbitmq.client.Channel;
@@ -17,14 +18,21 @@ import java.io.IOException;
 @RequiredArgsConstructor
 public class AlertMessageConsumer {
 
-    private final AlertMessageProcessor alertMessageProcessor;
+    public static final String LISTENER_ID = "alertMessageListener";
 
-    @RabbitListener(queues = "${alertworker.rabbitmq.queue}", ackMode = "MANUAL")
+    private final AlertMessageProcessor alertMessageProcessor;
+    private final NodeHeartbeatService nodeHeartbeatService;
+
+    @RabbitListener(id = LISTENER_ID, queues = "${alertworker.rabbitmq.queue}", ackMode = "MANUAL")
     public void onMessage(AlertMessagePayload payload, Message message, Channel channel) throws IOException {
         long deliveryTag = message.getMessageProperties().getDeliveryTag();
         Long messageId = payload.getAlertMessageId();
-        // #AI-CODE-FUNCTION-dev_release/v0.0.1-20260811: delegate core processing to AlertMessageProcessor; keep only MQ ack/nack + retry sleep
-        log.info("Received message from MQ, messageId={}", messageId);
+        if (nodeHeartbeatService.isDisabled()) {
+            log.warn("Worker node {} disabled, requeue message {}", nodeHeartbeatService.getNodeId(), messageId);
+            channel.basicNack(deliveryTag, false, true);
+            return;
+        }
+        log.info("Received message from MQ, messageId={}, messageNo={}", messageId, payload.getMessageNo());
         ProcessingResult result = alertMessageProcessor.process(payload);
         if (result.success()) {
             channel.basicAck(deliveryTag, false);

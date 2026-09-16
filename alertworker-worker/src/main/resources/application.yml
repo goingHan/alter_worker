@@ -46,3 +46,7 @@ alertworker:
     queue: alertworker.queue
     dlq: alertworker.dlq
     dlx: alertworker.dlx
+  node:
+    enabled: true
+    type: WORKER
+    host: ${NODE_HOST:}

@@ -45,3 +45,7 @@ alertworker:
     queue: alertworker.queue
     dlq: alertworker.dlq
     dlx: alertworker.dlx
+  node:
+    enabled: true
+    type: GATEWAY
+    host: ${NODE_HOST:}
