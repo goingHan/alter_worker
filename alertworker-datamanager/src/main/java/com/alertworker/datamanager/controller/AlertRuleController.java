@@ -42,13 +42,18 @@ public class AlertRuleController {
     public Page<AlertRule> list(@RequestParam(defaultValue = "1") int current,
                                 @RequestParam(defaultValue = "20") int size,
                                 @RequestParam(required = false) String name,
-                                @RequestParam(required = false) AlertType alertType) {
+                                @RequestParam(required = false) AlertType alertType,
+                                @RequestParam(required = false) Boolean silenced) {
         LambdaQueryWrapper<AlertRule> wrapper = new LambdaQueryWrapper<>();
         if (name != null && !name.isBlank()) {
             wrapper.like(AlertRule::getName, name);
         }
         if (alertType != null) {
             wrapper.eq(AlertRule::getAlertType, alertType);
+        }
+        // #AI-CODE-FUNCTION-dev_release/v0.0.1-20260917: silence filter for the rule list
+        if (silenced != null) {
+            wrapper.eq(AlertRule::getSilenced, silenced);
         }
         return alertRuleMapper.selectPage(new Page<>(current, size), wrapper);
     }
@@ -84,9 +89,28 @@ public class AlertRuleController {
         return entity;
     }
 
+    // #AI-CODE-FUNCTION-dev_release/v0.0.1-20260917: dedicated silence toggle. While silenced, the gateway drops
+    // every alert this rule matches (test alerts included) and records it as SILENCED instead of delivering it.
+    // Kept separate from PUT /{id} so a plain edit never accidentally flips the switch.
+    @PutMapping("/{id}/silence")
+    public AlertRule setSilence(@PathVariable Long id, @RequestBody SilenceRequest request) {
+        AlertRule rule = alertRuleMapper.selectById(id);
+        if (rule == null || rule.getDeleted() == 1) {
+            throw new IllegalArgumentException("Rule not found: " + id);
+        }
+        boolean silenced = Boolean.TRUE.equals(request.getSilenced());
+        AlertRule update = new AlertRule();
+        update.setId(id);
+        update.setSilenced(silenced);
+        alertRuleMapper.updateById(update);
+        rule.setSilenced(silenced);
+        auditLogService.log(silenced ? "SILENCE_ON" : "SILENCE_OFF", "ALERT_RULE", id, "admin",
+                request.getReason());
+        return rule;
+    }
+
     @DeleteMapping("/{id}")
-    public void delete(@PathVariable Long id) {
-        ruleGroupMapper.delete(new LambdaQueryWrapper<RuleGroup>().eq(RuleGroup::getRuleId, id));
+    public void delete(@PathVariable Long id) {        ruleGroupMapper.delete(new LambdaQueryWrapper<RuleGroup>().eq(RuleGroup::getRuleId, id));
         ruleAssigneeMapper.delete(new LambdaQueryWrapper<RuleAssignee>().eq(RuleAssignee::getRuleId, id));
         alertRuleTemplateMapper.delete(
                 new LambdaQueryWrapper<AlertRuleTemplate>().eq(AlertRuleTemplate::getRuleId, id));
@@ -226,6 +250,13 @@ public class AlertRuleController {
     public static class RuleChannelBatchRequest {
         private List<Long> ruleIds;
         private List<Long> channelIds;
+    }
+
+    // #AI-CODE-FUNCTION-dev_release/v0.0.1-20260917: silence toggle payload; reason is audit-only
+    @Data
+    public static class SilenceRequest {
+        private Boolean silenced;
+        private String reason;
     }
 
     // #AI-CODE-FUNCTION-dev_release/v0.0.1-20260902: direct rule->assignee binding endpoints

@@ -60,6 +60,23 @@ public class GatewayAlertMessageService {
         auditLogService.logEvent("GW_FAILED", "Message " + messageId + " failed: " + reason);
     }
 
+    // #AI-CODE-FUNCTION-dev_release/v0.0.1-20260917: terminal state for a silenced rule — the alert is dropped
+    // before channel resolution and never reaches RabbitMQ, but the record stays queryable for the dashboard
+    public void transitionToSilenced(Long messageId, Long alertRuleId) {
+        updateStatus(messageId, MessageStatus.SILENCED, null);
+        auditLogService.logEvent("GW_SILENCED",
+                "Message " + messageId + " dropped by silenced alert rule " + alertRuleId);
+    }
+
+    // #AI-CODE-FUNCTION-dev_release/v0.0.1-20260917: terminal state for an alert that matched no rule. It is dropped
+    // like a silenced alert (no recipients, no MQ) but tracked under its own status so the dashboard can show what
+    // arrived without a matching rule instead of burying it among real failures.
+    public void transitionToUnmatched(Long messageId, String reason) {
+        updateStatus(messageId, MessageStatus.UNMATCHED, null);
+        auditLogService.logEvent("GW_UNMATCHED",
+                "Message " + messageId + " dropped, matched no alert rule: " + reason);
+    }
+
     private void updateStatus(Long messageId, MessageStatus status, MessageSubStatus subStatus) {
         LambdaUpdateWrapper<AlertMessage> wrapper = new LambdaUpdateWrapper<AlertMessage>()
                 .eq(AlertMessage::getId, messageId)

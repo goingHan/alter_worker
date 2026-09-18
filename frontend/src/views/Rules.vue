@@ -22,6 +22,11 @@
           <Option value="PROMETHEUS">Prometheus</Option>
           <Option value="JSON">JSON</Option>
         </Select>
+        <!-- #AI-CODE-FUNCTION-dev_release/v0.0.1-20260917: silence filter; gateway drops matched alerts while silenced -->
+        <Select v-model="filters.silenced" clearable filterable placeholder="静默状态" class="filter-item">
+          <Option value="true">已静默</Option>
+          <Option value="false">未静默</Option>
+        </Select>
         <Button type="primary" size="small" @click="search">查询</Button>
         <Button size="small" @click="reset">重置</Button>
       </div>
@@ -30,6 +35,11 @@
         <template #action="{ row }">
           <Button size="small" @click="openLink(row)">关联模板</Button>
           <Button size="small" @click="edit(row)">编辑</Button>
+          <Button
+            size="small"
+            :type="row.silenced ? 'success' : 'warning'"
+            @click="toggleSilence(row)"
+          >{{ row.silenced ? '恢复发送' : '静默' }}</Button>
           <Button size="small" type="error" @click="remove(row.id)">删除</Button>
         </template>
       </Table>
@@ -63,6 +73,13 @@
             </div>
             <Button size="small" @click="addMatch">+ 添加条件</Button>
             <div class="form-tip">运算符自上而下顺序计算；「非」表示该条件不成立（字段不存在时也算命中）</div>
+          </div>
+        </FormItem>
+        <FormItem label="静默">
+          <i-switch v-model="formData.silenced" />
+          <div class="form-tip">
+            开启后该规则匹配到的告警（含「测试告警」）在网关直接丢弃，不解析接收人、不发送任何渠道；
+            丢弃记录会以「已静默」状态出现在仪表盘与告警历史中。
           </div>
         </FormItem>
         <FormItem label="最大重试">
@@ -219,7 +236,7 @@ const selectedIds = ref([])
 const selectedRows = ref([])
 const groupNamesMap = ref({})
 const channelNamesMap = ref({})
-const filters = reactive({ name: '', alertType: '' })
+const filters = reactive({ name: '', alertType: '', silenced: '' })
 
 const linkVisible = ref(false)
 const linkRuleId = ref(null)
@@ -257,7 +274,7 @@ const assigneeTargetKeys = ref([])
 const editGroups = ref([])
 const editAssignees = ref([])
 
-const formData = reactive({ name: '', alertType: '', retryMax: 3, retryBackoff: '5s,10s,20s' })
+const formData = reactive({ name: '', alertType: '', retryMax: 3, retryBackoff: '5s,10s,20s', silenced: false })
 const matchList = ref([{ key: '', value: '', op: 'AND' }])
 const formChannelIds = ref([])
 
@@ -293,11 +310,37 @@ const matchSummary = (row) => {
     .join('')
 }
 
+// #AI-CODE-FUNCTION-dev_release/v0.0.1-20260917: silenced rules drop every matched alert at the gateway; the switch
+// here toggles the rule's silence state via the dedicated endpoint so a plain edit never flips it by accident
+const silencedText = (row) => (row.silenced ? '已静默' : '正常')
+
+const toggleSilence = (row) => {
+  const next = !row.silenced
+  Modal.confirm({
+    title: next ? '开启静默' : '恢复发送',
+    content: next
+      ? `开启后「${row.name}」匹配到的告警将被直接丢弃，不发送到任何渠道（含测试告警），直到手动恢复。确定开启吗？`
+      : `恢复后「${row.name}」匹配到的告警将正常发送到渠道。确定恢复吗？`,
+    onOk: async () => {
+      await request.put(`/rules/${row.id}/silence`, { silenced: next })
+      Message.success({ content: next ? '已开启静默' : '已恢复发送' })
+      fetch()
+    }
+  })
+}
+
 const columns = [
   { type: 'selection', width: 50, align: 'center' },
   { title: '名称', key: 'name' },
   { title: '告警类型', key: 'alertType', width: 110, render: (h, p) => h('span', {}, alertTypeText(p.row.alertType)) },
   { title: '匹配条件', minWidth: 220, render: (h, p) => h('span', { class: 'match-summary' }, matchSummary(p.row)) },
+  {
+    title: '静默',
+    key: 'silenced',
+    width: 96,
+    align: 'center',
+    render: (h, p) => h(Tag, { props: { color: p.row.silenced ? 'orange' : 'default' } }, () => silencedText(p.row))
+  },
   { title: '关联群组', key: 'groups', render: (h, p) => {
     const names = groupNamesMap.value[p.row.id] || []
     return h('span', {}, names.length ? names.join('、') : '—')
@@ -310,7 +353,11 @@ const columns = [
       : h('span', { class: 'assoc-empty' }, '默认通道')
   } },
   { title: '重试', key: 'retryMax', width: 70, align: 'center' },
-  { title: '操作', slot: 'action', width: 210 }
+  {
+    title: '操作',
+    slot: 'action',
+    width: 330
+  }
 ]
 
 const testResultColumns = [
@@ -320,8 +367,19 @@ const testResultColumns = [
   {
     title: '结果',
     key: 'success',
-    width: 90,
-    render: (h, p) => h('Tag', { props: { color: p.row.success ? 'green' : 'red' } }, () => (p.row.success ? '已提交' : '失败'))
+    width: 110,
+    render: (h, p) => {
+      // #AI-CODE-FUNCTION-dev_release/v0.0.1-20260917: dropped-at-gateway test alerts (silenced rule, or a manual
+      // payload that matched no rule) must not be reported as a plain success, otherwise the operator assumes a
+      // channel was exercised
+      if (p.row.silenced) {
+        return h('Tag', { props: { color: 'orange' } }, () => '已静默丢弃')
+      }
+      if (p.row.unmatched) {
+        return h('Tag', { props: { color: 'default' } }, () => '未匹配丢弃')
+      }
+      return h('Tag', { props: { color: p.row.success ? 'green' : 'red' } }, () => (p.row.success ? '已提交' : '失败'))
+    }
   },
   { title: '错误', key: 'error', render: (h, p) => h('span', {}, p.row.error || '—') }
 ]
@@ -361,7 +419,8 @@ const fetch = async () => {
         current: page.value,
         size: pageSize.value,
         name: filters.name || undefined,
-        alertType: filters.alertType || undefined
+        alertType: filters.alertType || undefined,
+        silenced: filters.silenced === '' ? undefined : filters.silenced === 'true'
       }
     })
     data.value = res.data?.records || []
@@ -381,6 +440,7 @@ const search = () => {
 const reset = () => {
   filters.name = ''
   filters.alertType = ''
+  filters.silenced = ''
   search()
 }
 
@@ -691,6 +751,7 @@ const openCreateModal = async () => {
   formData.alertType = ''
   formData.retryMax = 3
   formData.retryBackoff = '5s,10s,20s'
+  formData.silenced = false
   matchList.value = [{ key: '', value: '', op: 'AND' }]
   formChannelIds.value = []
   editGroups.value = []
@@ -706,6 +767,7 @@ const edit = async (row) => {
   formData.alertType = row.alertType
   formData.retryMax = row.retryMax || 3
   formData.retryBackoff = row.retryBackoff || '5s,10s,20s'
+  formData.silenced = row.silenced === true
   matchList.value = parseConditions(row)
   formChannelIds.value = []
   await loadChannels()
@@ -764,7 +826,9 @@ const handleSubmit = async () => {
     // 全量替换渠道绑定；空数组 = 解除全部绑定（走默认通道）
     channelIds: formChannelIds.value,
     retryMax: formData.retryMax,
-    retryBackoff: formData.retryBackoff
+    retryBackoff: formData.retryBackoff,
+    // 静默开关随规则表单一起保存；列表行内按钮走 /rules/{id}/silence 专用接口
+    silenced: formData.silenced === true
   }
   if (editingId.value) {
     await request.put(`/rules/${editingId.value}`, payload)

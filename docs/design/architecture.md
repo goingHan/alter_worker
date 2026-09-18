@@ -79,7 +79,28 @@
 7. Status transitions: recieved → GW_SENT → DELIVERED → WORKER_SENT → success
    Failures: → FAILED / gw_failed / worker_failed
    Retry exhausted → dead_letter_message
+   Silenced rule → SILENCED (terminal, at step 2.5: no recipients, no MQ, dashboard-visible)
 ```
+
+### Silence Path（2026-09-17 起）
+
+```
+Gateway ingest → rule matched → rule.silenced == true
+  → persist alert_message (status = SILENCED, raw payload kept)
+  → HTTP 200 {status: "SILENCED", silenced: true, recipientCount: 0}
+  → NO recipient resolution, NO channel, NO RabbitMQ message
+```
+
+### Unmatched Path（2026-09-17 起）
+
+```
+Gateway ingest → no rule matched (matcher returned null)
+  → persist alert_message (status = UNMATCHED, alert_rule_id = NULL, raw payload kept)
+  → HTTP 200 {status: "UNMATCHED", unmatched: true, reason: "No matching alert rule"}
+  → NO recipient resolution, NO channel, NO RabbitMQ message, NO retry, NO dead letter
+```
+
+两种丢弃都不算失败：`failed` 只统计 `FAILED`，丢弃分别计入 `silenced` / `unmatched`，并在仪表盘各有独立卡片与面板。
 
 ## Key Design Decisions
 

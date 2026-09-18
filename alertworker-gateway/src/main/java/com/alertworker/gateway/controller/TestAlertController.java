@@ -95,7 +95,30 @@ public class TestAlertController {
 
         Map<String, Object> body = new HashMap<>();
         body.put("mode", payloadMode ? "payload" : "auto");
-        body.put("message", "已提交 " + results.stream().filter(r -> Boolean.TRUE.equals(r.get("success"))).count() + " 条测试告警");
+        long sent = results.stream()
+                .filter(r -> Boolean.TRUE.equals(r.get("success"))
+                        && !Boolean.TRUE.equals(r.get("silenced"))
+                        && !Boolean.TRUE.equals(r.get("unmatched")))
+                .count();
+        long silenced = results.stream()
+                .filter(r -> Boolean.TRUE.equals(r.get("silenced")))
+                .count();
+        long unmatched = results.stream()
+                .filter(r -> Boolean.TRUE.equals(r.get("unmatched")))
+                .count();
+        // #AI-CODE-FUNCTION-dev_release/v0.0.1-20260917: dropped test alerts (silenced rule, or a manual payload that
+        // matched no rule) must be reported as dropped instead of a plain success, otherwise the operator assumes a
+        // channel was exercised
+        StringBuilder message = new StringBuilder("已提交 " + sent + " 条测试告警");
+        if (silenced > 0) {
+            message.append("，").append(silenced).append(" 条被静默规则丢弃");
+        }
+        if (unmatched > 0) {
+            message.append("，").append(unmatched).append(" 条未匹配到规则已丢弃");
+        }
+        body.put("message", message.toString());
+        body.put("silencedCount", silenced);
+        body.put("unmatchedCount", unmatched);
         body.put("results", results);
         return ResponseEntity.ok(body);
     }
@@ -120,6 +143,8 @@ public class TestAlertController {
         row.put("recordId", result.recordId());
         row.put("recipientCount", result.recipientCount());
         row.put("success", result.success());
+        row.put("silenced", result.silenced());
+        row.put("unmatched", result.unmatched());
         row.put("error", result.error());
         return row;
     }

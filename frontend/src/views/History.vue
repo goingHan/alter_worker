@@ -145,7 +145,10 @@ const statusOptions = [
   { value: 'DELIVERED', label: '处理中' },
   { value: 'WORKER_SENT', label: '已发送' },
   { value: 'FAILED', label: '失败' },
-  { value: 'success', label: '成功' }
+  { value: 'success', label: '成功' },
+  // #AI-CODE-FUNCTION-dev_release/v0.0.1-20260917: dropped at the gateway — silenced rule, or no matching rule
+  { value: 'SILENCED', label: '已静默' },
+  { value: 'UNMATCHED', label: '未匹配' }
 ]
 
 const columns = [
@@ -163,7 +166,9 @@ const columns = [
         DELIVERED: ['st-info', '处理中'],
         WORKER_SENT: ['st-info', '已发送'],
         GW_SENT: ['st-info', '已入队'],
-        recieved: ['st-info', '已接收']
+        recieved: ['st-info', '已接收'],
+        SILENCED: ['st-silenced', '已静默'],
+        UNMATCHED: ['st-unmatched', '未匹配']
       }
       const [cls, text] = map[s] || ['st-info', s || '--']
       return h('span', { class: 'status-badge ' + cls }, text)
@@ -367,6 +372,10 @@ onMounted(fetch)
 }
 .st-success { color: var(--aw-success); background: rgba(110, 185, 138, 0.16); }
 .st-info { color: var(--aw-info); background: rgba(127, 180, 201, 0.16); }
+/* #AI-CODE-FUNCTION-dev_release/v0.0.1-20260917: status of an alert dropped by a silenced rule */
+.st-silenced { color: #9b8fd0; background: rgba(155, 143, 208, 0.16); }
+/* #AI-CODE-FUNCTION-dev_release/v0.0.1-20260917: status of an alert dropped because no rule matched */
+.st-unmatched { color: var(--aw-info); background: rgba(127, 180, 201, 0.16); }
 .st-failed {
   color: #fff;
   background: var(--aw-error);

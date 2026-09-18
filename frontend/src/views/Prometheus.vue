@@ -35,11 +35,13 @@
       <pre class="code-block"><code>receivers:
   - name: 'alertworker'
     webhook_configs:
-      - url: 'http://&lt;gateway-host&gt;:8081/pw/alertworker/gw/api/v1/alerts/prometheus'
+      - url: 'http://172.168.1.249:24980/pw/alertworker/gw/api/v1/alerts/prometheus'
         send_resolved: true
         http_config:
-          headers:
-            X-API-Key: '&lt;你的 API 密钥值&gt;'</code></pre>
+          http_headers:
+            X-API-Key:
+              values:
+                - '&lt;你的 API 密钥值&gt;'</code></pre>
     </Card>
 
     <Card :bordered="false" class="panel-card">

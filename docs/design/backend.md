@@ -36,6 +36,14 @@ All routes are `GET/POST/PUT/DELETE` standard CRUD unless noted.
 - Full CRUD + nested group + template management
 - `GET/POST/DELETE /{id}/groups` — manage linked groups
 - `GET/POST/DELETE /{id}/templates` — manage linked templates
+- `PUT /{id}/silence` — 规则静默开关（2026-09-17 起）；静默期间网关丢弃该规则匹配到的全部告警，只落 `SILENCED` 记录
+
+### /api/v1/stats → `StatsController`
+- `GET /overview` — 24h 总消息/成功/失败/死信 + `silenced`（被静默丢弃数）+ `unmatched`（未匹配规则被丢弃数）+ `silencedRules`（当前静默规则数）
+- `GET /24h` — 逐小时趋势（含 `silenced`、`unmatched` 桶）
+- `GET /silenced` — 最近被静默丢弃的消息列表（仪表盘「已静默消息」面板）
+- `GET /unmatched` — 最近未匹配到规则的消息列表（仪表盘「未匹配告警」面板）
+- `GET /timing` — 耗时分段统计
 
 ### /api/v1/dictionaries → `DictionaryController`
 - CRUD + `GET /types/{dictType}` — filter by dict_type

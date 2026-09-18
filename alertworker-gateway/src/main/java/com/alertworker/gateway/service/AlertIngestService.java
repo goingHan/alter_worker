@@ -31,7 +31,8 @@ public class AlertIngestService {
     private final GatewayAlertMessageService gatewayAlertMessageService;
 
     public record IngestResult(boolean success, int status, String messageNo, Long recordId,
-                               AlertRule rule, int recipientCount, String error) {
+                               AlertRule rule, int recipientCount, String error,
+                               boolean silenced, boolean unmatched) {
     }
 
     public IngestResult ingest(Long apiKeyId, AlertType alertType, String rawPayload, String messageNo,
@@ -44,11 +45,26 @@ public class AlertIngestService {
 
             AlertRule rule = forcedRule != null ? forcedRule : alertRuleMatcher.match(parsedAlert, alertType);
             if (rule == null) {
-                log.warn("No matching alert rule found for {} alert, messageNo={}", alertType, messageNo);
+                // #AI-CODE-FUNCTION-dev_release/v0.0.1-20260917: no rule matched — drop the alert instead of failing it:
+                // nothing is enqueued or retried, the run is recorded as UNMATCHED, and the caller gets 2xx (the alert
+                // was accepted and handled) so upstream alerting does not re-send it forever.
+                String reason = "No matching alert rule";
+                log.warn("No matching alert rule found for {} alert, messageNo={} — dropped", alertType, messageNo);
                 AlertMessage msg = gatewayAlertMessageService.create(
                         apiKeyId, null, parsedAlert.getContext(), messageNo, rawPayload, null);
-                gatewayAlertMessageService.transitionToFailed(msg.getId(), MessageSubStatus.gw_failed, "No matching alert rule");
-                return new IngestResult(false, 400, messageNo, msg.getId(), null, 0, "No matching alert rule");
+                gatewayAlertMessageService.transitionToUnmatched(msg.getId(), reason);
+                return new IngestResult(true, 200, messageNo, msg.getId(), null, 0, reason, false, true);
+            }
+
+            // #AI-CODE-FUNCTION-dev_release/v0.0.1-20260917: a silenced rule drops the alert here — no recipient or
+            // channel resolution, nothing enqueued; the run is recorded as SILENCED so the dashboard can show what
+            // the silence blocked. The request still answers 2xx because the alert was accepted and handled.
+            if (Boolean.TRUE.equals(rule.getSilenced())) {
+                log.info("Alert rule {} is silenced, dropping {} alert, messageNo={}", rule.getId(), alertType, messageNo);
+                AlertMessage msg = gatewayAlertMessageService.create(
+                        apiKeyId, rule.getId(), parsedAlert.getContext(), messageNo, rawPayload, null);
+                gatewayAlertMessageService.transitionToSilenced(msg.getId(), rule.getId());
+                return new IngestResult(true, 200, messageNo, msg.getId(), rule, 0, null, true, false);
             }
 
             AlertMessagePayload mqPayload = messageBuilder.build(rule, parsedAlert, overrideChannel);
@@ -61,14 +77,14 @@ public class AlertIngestService {
             alertMessageProducer.send(mqPayload);
             gatewayAlertMessageService.transitionToGwSent(message.getId());
 
-            return new IngestResult(true, 200, messageNo, message.getId(), rule, mqPayload.getRecipients().size(), null);
+            return new IngestResult(true, 200, messageNo, message.getId(), rule, mqPayload.getRecipients().size(), null, false, false);
         } catch (Exception e) {
             log.error("Failed to handle {} alert, messageNo={}", alertType, messageNo, e);
             String reason = e.getMessage() != null ? e.getMessage() : e.getClass().getSimpleName();
             AlertMessage msg = gatewayAlertMessageService.create(
                     apiKeyId, null, Map.of("error", reason), messageNo, rawPayload, null);
             gatewayAlertMessageService.transitionToFailed(msg.getId(), MessageSubStatus.gw_failed, reason);
-            return new IngestResult(false, 500, messageNo, msg.getId(), null, 0, reason);
+            return new IngestResult(false, 500, messageNo, msg.getId(), null, 0, reason, false, false);
         }
     }
 }

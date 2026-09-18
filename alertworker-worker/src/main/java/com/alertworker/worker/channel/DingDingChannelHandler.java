@@ -99,6 +99,8 @@ public class DingDingChannelHandler {
                 }
                 yield body;
             }
+            // #AI-CODE-FUNCTION-dev_release/v0.0.1-20260916: DingDing only honors the at block for text/markdown,
+            // so action_card cannot @ anyone; use msgType text or markdown if @ is required
             case "action_card" -> {
                 @SuppressWarnings("unchecked")
                 Map<String, Object> actionCard = (Map<String, Object>) config.get("actionCard");
@@ -126,33 +128,34 @@ public class DingDingChannelHandler {
         };
     }
 
-    // #AI-CODE-FUNCTION-dev_release/v0.0.1-20260916: @ DingDing users by dingdingUsername instead of phone number
+    // #AI-CODE-FUNCTION-dev_release/v0.0.1-20260916: DingDing custom robots cannot @ by nickname; @ is driven by
+    // phone number only. atMobiles plus an "@手机号" mention in the body makes DingDing render "@名字" in the group.
     private Map<String, Object> buildAt(List<AlertRecipient> recipients) {
-        Set<String> atUserIds = new LinkedHashSet<>();
+        Set<String> atMobiles = new LinkedHashSet<>();
         for (AlertRecipient recipient : recipients) {
-            if (StringUtils.hasText(recipient.getDingdingUsername())) {
-                atUserIds.add(recipient.getDingdingUsername());
+            if (StringUtils.hasText(recipient.getPhone())) {
+                atMobiles.add(recipient.getPhone());
             }
         }
-        if (atUserIds.isEmpty()) {
+        if (atMobiles.isEmpty()) {
             return null;
         }
         Map<String, Object> at = new HashMap<>();
-        at.put("atUserIds", new ArrayList<>(atUserIds));
+        at.put("atMobiles", new ArrayList<>(atMobiles));
         at.put("isAtAll", false);
         return at;
     }
 
     private String buildAtMentionText(List<AlertRecipient> recipients) {
-        List<String> names = recipients.stream()
-                .map(AlertRecipient::getDingdingUsername)
+        List<String> phones = recipients.stream()
+                .map(AlertRecipient::getPhone)
                 .filter(StringUtils::hasText)
                 .distinct()
                 .toList();
-        if (names.isEmpty()) {
+        if (phones.isEmpty()) {
             return null;
         }
-        return names.stream().map(name -> "@" + name).collect(Collectors.joining(" ")) + " ";
+        return phones.stream().map(phone -> "@" + phone).collect(Collectors.joining(" ")) + " ";
     }
 
     // #AI-CODE-FUNCTION-dev_release/v0.0.1-20260908: place @ mentions at the end of the message body instead of the beginning

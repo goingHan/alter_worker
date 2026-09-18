@@ -167,8 +167,8 @@ curl -X POST http://localhost:8083/pw/alertworker/dm/api/v1/channels \
 | 字段 | 说明 |
 |---|---|
 | CN Name | 中文姓名，如 `张三` |
-| Phone | 手机号 |
-| DingDing Username | 钉钉用户名，用于定位群成员 |
+| Phone | 钉钉绑定手机号。**钉钉自定义机器人只能按手机号 @ 人**，请确保该号码属于目标群/企业成员 |
+| DingDing Name | 钉钉姓名，仅用于模板变量展示（如 `{{ recipient.dingdingUsername }}`），**不参与 @** |
 
 ### API
 

@@ -62,10 +62,12 @@ SSE 的 token 从 localStorage 读取（`History.vue:164`），不走 axios。
 
 | UI 区域 | 模板行 | 逻辑 |
 |---|---|---|
-| 统计卡片（24h 总消息/成功/失败/死信） | `3-32` | 数据源 `/stats/overview`（`fetchStats` `117-146`） |
-| 24 小时折线图（总消息/失败/死信） | `35-40` | `LineChart` 组件（`components/LineChart.vue`）；数据 `/stats/24h` |
-| 耗时统计（Gateway 处理 / 队列转运 / Worker 派发） | `43-65` | `TimingStat` 内联组件；数据 `/stats/timing` |
-| Recent Alerts 表格（最近 10 条：ID/内容/耗时/状态/时间） | `68-72` | 数据 `/alerts/recent?size=10`；状态 Tag 渲染 `statusTag` `98-111` |
+| 统计卡片（24h 总消息/成功/失败/死信/已静默/未匹配） | `19-77` | 数据源 `/stats/overview`（`fetchStats`）；「已静默」「未匹配」卡片 2026-09-17 新增，两行布局（4 + 2） |
+| 24 小时折线图（总消息/失败/死信/已静默/未匹配） | `79-85` | `LineChart` 组件（`components/LineChart.vue`）；数据 `/stats/24h`；全 0 的分组自动隐藏 |
+| 已静默消息面板（被静默规则丢弃的告警） | `87-103` | 数据 `/stats/silenced?size=10`；`droppedColumns` 渲染 |
+| 未匹配告警面板（没命中任何规则、已丢弃） | `105-127` | 数据 `/stats/unmatched?size=10`；`unmatchedColumns`（无规则名列） |
+| 耗时统计（Gateway 处理 / 队列转运 / Worker 派发） | `129-153` | `TimingStat` 内联组件；数据 `/stats/timing` |
+| Recent Alerts 表格（最近 10 条：ID/内容/耗时/状态/时间） | `155-166` | 数据 `/alerts/recent?size=10`；状态 Tag 渲染 `statusTag`（含 `SILENCED`/`UNMATCHED`） |
 
 - 15 秒自动刷新（`onMounted` 定时器 `148-154`）
 - 折线图为自研 SVG 组件（无第三方图表库），tooltip 跟随鼠标
@@ -101,7 +103,7 @@ SSE 的 token 从 localStorage 读取（`History.vue:164`），不走 axios。
 - Assignees：`GET/POST /assignees`、`PUT/DELETE /assignees/{id}`
 - Groups：`GET/POST /groups`、`PUT/DELETE /groups/{id}`
 - Templates：`GET/POST /templates`、`PUT/DELETE /templates/{id}`、`POST /templates/{id}/preview`
-- Rules：`GET/POST /rules`、`PUT/DELETE /rules/{id}`
+- Rules：`GET/POST /rules`、`PUT/DELETE /rules/{id}`、`PUT /rules/{id}/silence`（静默开关）
 - Failed：`GET /alerts/failed`、`GET /alerts/dead-letters`（列表含 messageNo 列）
 
 ## 5. 前端 API → 后端对应表
@@ -109,7 +111,7 @@ SSE 的 token 从 localStorage 读取（`History.vue:164`），不走 axios。
 | 前端调用 | 后端模块 | 后端类 |
 |---|---|---|
 | `/auth/login`、`/auth/me` | datamanager | `AuthController` |
-| `/stats/overview`、`/stats/24h`、`/stats/timing` | datamanager | `StatsController` |
+| `/stats/overview`、`/stats/24h`、`/stats/timing`、`/stats/silenced`、`/stats/unmatched` | datamanager | `StatsController` |
 | `/nodes`、`/nodes/summary`、`/nodes/{id}/status|weight|test` | datamanager | `NodeController` |
 | `/alerts/recent`、`/alerts/history*`、`/alerts/failed`、`/alerts/dead-letters`、`/alerts/delivery-logs` | datamanager | `AlertMessageController` |
 | `/api-keys*` | datamanager | `ApiKeyController` |
@@ -134,6 +136,36 @@ SSE 的 token 从 localStorage 读取（`History.vue:164`），不走 axios。
 | 「告警详情无原始报文」 | 后端 `AlertMessageController.detail`（rawPayload 字段）+ gateway `AlertController`（存 rawPayload） |
 | 「耗时数据为空」 | `AlertMessageMapper.timingStatsSince`（24h 窗口内无完成态消息则 null） |
 | 「历史页收不到实时消息」 | `History.vue connectSse` + 后端 `AlertSseController` |
+| 「告警没发出来 / 群里收不到但历史有记录」 | 先看规则是否被静默：`Rules.vue` 静默列/`toggleSilence` → `/rules/{id}/silence` → 网关 `AlertIngestService.ingest` 静默分支；历史页状态筛选 `SILENCED` |
+| 「仪表盘「已静默」卡片或面板是空的」 | `/stats/overview` 的 `silenced` + `/stats/silenced`；确认 24h 窗口内确有 `status = SILENCED` 记录（`alert_message`） |
+| 「有告警进来但没人收到、历史里状态是「未匹配」」 | 没有任何规则命中 → 网关直接丢弃（`AlertIngestService.ingest` 的 `rule == null` 分支）；查 `Dashboard.vue` 未匹配面板确认报文的 labels/keys，再去 `Rules.vue` 补规则或修匹配条件 |
+
+## 6.5 静默功能（2026-09-17 新增）
+
+| 层 | 位置 | 说明 |
+|---|---|---|
+| 规则开关 UI | `Rules.vue` 表格「静默」列 + 行内「静默/恢复发送」按钮（`toggleSilence`，带二次确认） | 走 `PUT /rules/{id}/silence`，与普通编辑解耦 |
+| 规则表单 | `Rules.vue` 编辑弹窗「静默」`i-switch`（`formData.silenced`） | 随规则保存提交 `silenced` |
+| 规则筛选 | `Rules.vue` filter-bar「静默状态」（`filters.silenced`） | 映射到 `GET /rules?silenced=true/false` |
+| 仪表盘 | `Dashboard.vue`「已静默」统计卡片 + 「已静默消息」面板 | `/stats/overview.silenced`、`/stats/silenced`；「管理规则静默」跳 `/rules` |
+| 告警历史 | `History.vue` 状态筛选 `SILENCED` + 徽标 `st-silenced` | 可查全部被丢弃告警及其报文 |
+| 测试告警 | `Rules.vue` 测试结果列为「已静默丢弃」橙色 Tag | 静默期间测试告警同样被丢弃，不会误发 |
+
+后端链路：`AlertIngestService.ingest` 命中规则后先判 `rule.silenced` → 落 `SILENCED` 记录 → 直接返回，不解析接收人/渠道、不入 MQ。
+
+## 6.6 未匹配告警（2026-09-17 新增）
+
+没有任何规则命中时不再记为失败，而是直接丢弃并单独统计：
+
+| 层 | 位置 | 说明 |
+|---|---|---|
+| 后端丢弃 | `AlertIngestService.ingest` 的 `rule == null` 分支 | 落 `UNMATCHED` 记录（`alert_rule_id` 为 NULL）→ 返回 `200`，body `{status:"UNMATCHED", unmatched:true}` |
+| 后端统计 | `StatsController` `/stats/overview.unmatched`、`/stats/24h[].unmatched`、`/stats/unmatched` | 与 `SILENCED` 共用 `AlertMessageMapper.selectDroppedRecent(status, limit)` |
+| 仪表盘 | `Dashboard.vue`「未匹配」统计卡片 + 「未匹配告警」面板 | 卡片与「已静默」同排（`lg=10`）；面板用 `unmatchedColumns`（无规则名，因为未匹配就是没有规则） |
+| 告警历史 | `History.vue` 状态筛选 `UNMATCHED` + 徽标 `st-unmatched` | 可按状态筛出全部未匹配告警并查看原始报文 |
+| 测试告警 | `Rules.vue` 测试结果列「未匹配丢弃」灰色 Tag | 手动输入报文走真实匹配时同样会被丢弃 |
+
+判定要点：**未匹配 ≠ 失败**。`failed` 只统计 `FAILED`（网关异常 / Worker 发送失败），未匹配计入 `unmatched`，也不写 `dead_letter_message`。
 
 ## 7. 已知问题清单
 

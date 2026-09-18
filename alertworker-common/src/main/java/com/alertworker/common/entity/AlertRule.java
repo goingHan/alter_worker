@@ -37,6 +37,11 @@ public class AlertRule extends BaseEntity {
     private Integer retryMax;
     private String retryBackoff;
 
+    // #AI-CODE-FUNCTION-dev_release/v0.0.1-20260917: manual silence switch. While TRUE, every alert matched by this
+    // rule (including test alerts) is dropped at the gateway: no channel resolution, no MQ message, only a SILENCED
+    // alert_message record for the dashboard. NULL is normalised to FALSE by the DB default.
+    private Boolean silenced;
+
     // #AI-CODE-FUNCTION-dev_release/v0.0.1-20260916: request-only field; null = leave bindings untouched,
     // empty list = unbind all (fall back to default channels)
     @TableField(exist = false)

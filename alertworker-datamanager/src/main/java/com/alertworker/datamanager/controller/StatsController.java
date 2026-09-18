@@ -3,14 +3,17 @@ package com.alertworker.datamanager.controller;
 import com.alertworker.common.dto.HourlyStatView;
 import com.alertworker.common.dto.TimingStatRow;
 import com.alertworker.common.mapper.AlertMessageMapper;
+import com.alertworker.common.mapper.AlertRuleMapper;
 import com.alertworker.common.mapper.DeadLetterMessageMapper;
 import com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper;
 import com.alertworker.common.entity.AlertMessage;
+import com.alertworker.common.entity.AlertRule;
 import com.alertworker.common.entity.DeadLetterMessage;
 import com.alertworker.common.enums.MessageStatus;
 import lombok.RequiredArgsConstructor;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.RequestMapping;
+import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.RestController;
 
 import java.time.LocalDateTime;
@@ -27,6 +30,7 @@ public class StatsController {
 
     private final AlertMessageMapper alertMessageMapper;
     private final DeadLetterMessageMapper deadLetterMessageMapper;
+    private final AlertRuleMapper alertRuleMapper;
 
     @GetMapping("/24h")
     public List<Map<String, Object>> last24Hours() {
@@ -51,6 +55,8 @@ public class StatsController {
             bucket.put("total", row != null && row.getTotal() != null ? row.getTotal() : 0L);
             bucket.put("failed", row != null && row.getFailed() != null ? row.getFailed() : 0L);
             bucket.put("deadLetters", row != null && row.getDeadLetters() != null ? row.getDeadLetters() : 0L);
+            bucket.put("silenced", row != null && row.getSilenced() != null ? row.getSilenced() : 0L);
+            bucket.put("unmatched", row != null && row.getUnmatched() != null ? row.getUnmatched() : 0L);
             result.add(bucket);
         }
         return result;
@@ -85,7 +91,53 @@ public class StatsController {
                 .eq(AlertMessage::getStatus, MessageStatus.success));
         long deadLetters = deadLetterMessageMapper.selectCount(new LambdaQueryWrapper<DeadLetterMessage>()
                 .ge(DeadLetterMessage::getCreatedAt, from));
-        return Map.of("total", total, "success", success, "failed", failed, "deadLetters", deadLetters);
+        // #AI-CODE-FUNCTION-dev_release/v0.0.1-20260917: silenced = dropped by a silenced rule in the last 24h
+        long silenced = alertMessageMapper.selectCount(new LambdaQueryWrapper<AlertMessage>()
+                .ge(AlertMessage::getReceivedAt, from)
+                .eq(AlertMessage::getStatus, MessageStatus.SILENCED));
+        // #AI-CODE-FUNCTION-dev_release/v0.0.1-20260917: unmatched = dropped because no alert rule matched
+        long unmatched = alertMessageMapper.selectCount(new LambdaQueryWrapper<AlertMessage>()
+                .ge(AlertMessage::getReceivedAt, from)
+                .eq(AlertMessage::getStatus, MessageStatus.UNMATCHED));
+        long silencedRules = alertRuleMapper.selectCount(new LambdaQueryWrapper<AlertRule>()
+                .eq(AlertRule::getSilenced, true));
+        Map<String, Object> result = new HashMap<>();
+        result.put("total", total);
+        result.put("success", success);
+        result.put("failed", failed);
+        result.put("deadLetters", deadLetters);
+        result.put("silenced", silenced);
+        result.put("unmatched", unmatched);
+        result.put("silencedRules", silencedRules);
+        return result;
+    }
+
+    // #AI-CODE-FUNCTION-dev_release/v0.0.1-20260917: alerts dropped at the gateway — by a silenced rule, or because no
+    // rule matched. Newest first; the payload is trimmed here because the dashboard only renders a one-line summary.
+    @GetMapping("/silenced")
+    public List<Map<String, Object>> silenced(@RequestParam(defaultValue = "10") int size) {
+        return droppedViews(MessageStatus.SILENCED, size);
+    }
+
+    @GetMapping("/unmatched")
+    public List<Map<String, Object>> unmatched(@RequestParam(defaultValue = "10") int size) {
+        return droppedViews(MessageStatus.UNMATCHED, size);
+    }
+
+    private List<Map<String, Object>> droppedViews(MessageStatus status, int size) {
+        List<Map<String, Object>> rows = alertMessageMapper.selectDroppedRecent(
+                status.name(), Math.min(Math.max(size, 1), 100));
+        List<Map<String, Object>> result = new ArrayList<>();
+        for (Map<String, Object> row : rows) {
+            Map<String, Object> view = new HashMap<>(row);
+            Object payload = row.get("payload");
+            String text = payload == null ? "" : String.valueOf(payload);
+            view.put("summary", text.length() > 200 ? text.substring(0, 200) + "..." : text);
+            view.put("fullContent", text);
+            view.remove("payload");
+            result.add(view);
+        }
+        return result;
     }
 
     private Map<String, Object> segment(Double avg, Double p95, Double max) {

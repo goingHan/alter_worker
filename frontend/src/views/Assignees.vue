@@ -25,10 +25,12 @@
           <Input v-model="formData.cnName" placeholder="中文姓名（必填）" />
         </FormItem>
         <FormItem label="手机号">
-          <Input v-model="formData.phone" placeholder="手机号" />
+          <Input v-model="formData.phone" placeholder="钉钉绑定手机号" />
+          <div class="form-tip">钉钉机器人只能按手机号 @ 人，请填写该成员的钉钉绑定手机号</div>
         </FormItem>
-        <FormItem label="钉钉用户名">
-          <Input v-model="formData.dingdingUsername" placeholder="钉钉用户名" />
+        <FormItem label="钉钉姓名">
+          <Input v-model="formData.dingdingUsername" placeholder="钉钉姓名（仅模板展示用）" />
+          <div class="form-tip">仅用于模板变量展示，不参与 @</div>
         </FormItem>
         <FormItem label="邮箱">
           <Input v-model="formData.email" placeholder="邮箱（用于邮件通知）" />
@@ -65,7 +67,7 @@ const formData = reactive({ cnName: '', phone: '', dingdingUsername: '', email: 
 const columns = [
   { title: '中文姓名', key: 'cnName' },
   { title: '手机号', key: 'phone' },
-  { title: '钉钉', key: 'dingdingUsername' },
+  { title: '钉钉姓名', key: 'dingdingUsername' },
   { title: '群组', key: 'groups', render: (h, p) => {
     const names = groupNamesMap.value[p.row.id] || []
     return h('span', {}, names.length ? names.join('、') : '—')
@@ -215,4 +217,5 @@ onMounted(fetch)
 .card-header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 12px; }
 .card-title { font-size: 15px; font-weight: 600; color: var(--aw-text); }
 .pager { margin-top: 12px; text-align: right; }
+.form-tip { font-size: 12px; color: var(--aw-text-faint); margin-top: 4px; }
 </style>

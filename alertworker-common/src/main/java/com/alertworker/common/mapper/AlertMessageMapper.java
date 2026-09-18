@@ -21,6 +21,8 @@ public interface AlertMessageMapper extends BaseMapper<AlertMessage> {
             SELECT date_trunc('hour', m.received_at) AS hour,
                    COUNT(DISTINCT m.id) AS total,
                    COUNT(DISTINCT m.id) FILTER (WHERE m.status = 'FAILED') AS failed,
+                   COUNT(DISTINCT m.id) FILTER (WHERE m.status = 'SILENCED') AS silenced,
+                   COUNT(DISTINCT m.id) FILTER (WHERE m.status = 'UNMATCHED') AS unmatched,
                    COUNT(DISTINCT d.id) AS dead_letters
             FROM alert_message m
             LEFT JOIN dead_letter_message d ON d.alert_message_id = m.id
@@ -29,6 +31,21 @@ public interface AlertMessageMapper extends BaseMapper<AlertMessage> {
             ORDER BY 1
             """)
     List<HourlyStatView> countHourlySince(@Param("from") LocalDateTime from);
+
+    // #AI-CODE-FUNCTION-dev_release/v0.0.1-20260917: dropped messages for the dashboard — the alert was accepted but
+    // dropped before any channel (silenced rule, or no matching rule), so there is no delivery status or channel name
+    // to show. rule_name is only present for the silenced case: an unmatched alert has no rule by definition.
+    @Select("""
+            SELECT m.id, m.message_no AS "messageNo", m.alert_rule_id AS "alertRuleId",
+                   m.status, m.payload, m.received_at AS "receivedAt", m.created_at AS "createdAt",
+                   r.name AS "ruleName"
+            FROM alert_message m
+            LEFT JOIN alert_rule r ON r.id = m.alert_rule_id
+            WHERE m.deleted = 0 AND m.status = #{status}
+            ORDER BY m.created_at DESC
+            LIMIT #{limit}
+            """)
+    List<Map<String, Object>> selectDroppedRecent(@Param("status") String status, @Param("limit") int limit);
 
     @Select("""
             SELECT AVG(EXTRACT(EPOCH FROM (gw_sent_at - received_at)) * 1000)

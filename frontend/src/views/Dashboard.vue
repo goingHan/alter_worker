@@ -17,7 +17,7 @@
       </div>
     </div>
     <Row :gutter="16">
-      <Col span="6">
+      <Col :xs="12" :sm="12" :md="12" :lg="6">
         <Card class="stat-card" :bordered="false">
           <div class="stat-icon total"><Icon type="ios-pulse" size="20" /></div>
           <div class="stat-info">
@@ -26,7 +26,7 @@
           </div>
         </Card>
       </Col>
-      <Col span="6">
+      <Col :xs="12" :sm="12" :md="12" :lg="6">
         <Card class="stat-card" :bordered="false">
           <div class="stat-icon success"><Icon type="ios-checkmark-circle-outline" size="20" /></div>
           <div class="stat-info">
@@ -35,7 +35,7 @@
           </div>
         </Card>
       </Col>
-      <Col span="6">
+      <Col :xs="12" :sm="12" :md="12" :lg="6">
         <Card class="stat-card" :bordered="false">
           <div class="stat-icon error"><Icon type="ios-close-circle-outline" size="20" /></div>
           <div class="stat-info">
@@ -44,7 +44,7 @@
           </div>
         </Card>
       </Col>
-      <Col span="6">
+      <Col :xs="12" :sm="12" :md="12" :lg="6">
         <Card class="stat-card" :bordered="false">
           <div class="stat-icon warning"><Icon type="ios-bulb-outline" size="20" /></div>
           <div class="stat-info">
@@ -53,14 +53,77 @@
           </div>
         </Card>
       </Col>
+      <!-- #AI-CODE-FUNCTION-dev_release/v0.0.1-20260917: silenced = alerts dropped by a silenced rule before any channel -->
+      <Col :xs="12" :sm="12" :md="12" :lg="10">
+        <Card class="stat-card" :bordered="false">
+          <div class="stat-icon silenced"><Icon type="ios-notifications-off-outline" size="20" /></div>
+          <div class="stat-info">
+            <div class="stat-title">已静默</div>
+            <div class="stat-value silenced">{{ stats.silenced }}</div>
+          </div>
+        </Card>
+      </Col>
+      <!-- #AI-CODE-FUNCTION-dev_release/v0.0.1-20260917: unmatched = dropped because no alert rule matched at all -->
+      <Col :xs="12" :sm="12" :md="12" :lg="10">
+        <Card class="stat-card" :bordered="false">
+          <div class="stat-icon unmatched"><Icon type="ios-help-circle-outline" size="20" /></div>
+          <div class="stat-info">
+            <div class="stat-title">未匹配</div>
+            <div class="stat-value unmatched">{{ stats.unmatched }}</div>
+          </div>
+        </Card>
+      </Col>
     </Row>
 
     <Card :bordered="false" class="panel-card">
       <div class="panel-header">
         <span class="panel-title">24 小时告警趋势</span>
-        <span class="panel-sub">最近 24 小时 · 总消息 / 失败 / 死信</span>
+        <span class="panel-sub">最近 24 小时 · 总消息 / 失败 / 死信 / 已静默 / 未匹配</span>
       </div>
       <LineChart :labels="chart.labels" :series="chart.series" :height="280" />
+    </Card>
+
+    <!-- #AI-CODE-FUNCTION-dev_release/v0.0.1-20260917: what the silence switch swallowed — dropped at ingest, so a
+         row carries no channel and no delivery status, only the rule that matched -->
+    <Card :bordered="false" class="panel-card">
+      <div class="panel-header">
+        <span class="panel-title">已静默消息</span>
+        <span class="panel-sub">
+          最近 24 小时被静默规则丢弃的告警 · 共 {{ stats.silenced }} 条
+          <template v-if="stats.silencedRules"> · 当前静默规则 {{ stats.silencedRules }} 条</template>
+        </span>
+        <Button size="small" class="panel-action" @click="goRules">管理规则静默</Button>
+      </div>
+      <Table :columns="droppedColumns" :data="silencedAlerts" size="small" :loading="loading">
+        <template #content="{ row }">
+          <Tooltip :content="formatContent(row)" placement="top" :max-width="560" transfer>
+            <span class="summary-cell">{{ row.summary }}</span>
+          </Tooltip>
+        </template>
+        <template #empty>
+          <span class="dropped-empty">最近 24 小时没有被静默丢弃的告警</span>
+        </template>
+      </Table>
+    </Card>
+
+    <!-- #AI-CODE-FUNCTION-dev_release/v0.0.1-20260917: alerts nobody claimed — dropped for lack of a matching rule, so
+         there is no rule name; it is the signal that a rule is missing or a match key is wrong -->
+    <Card :bordered="false" class="panel-card">
+      <div class="panel-header">
+        <span class="panel-title">未匹配告警</span>
+        <span class="panel-sub">最近 24 小时没有命中任何规则、已直接丢弃的告警 · 共 {{ stats.unmatched }} 条</span>
+        <Button size="small" class="panel-action" @click="goRules">去配置规则</Button>
+      </div>
+      <Table :columns="unmatchedColumns" :data="unmatchedAlerts" size="small" :loading="loading">
+        <template #content="{ row }">
+          <Tooltip :content="formatContent(row)" placement="top" :max-width="560" transfer>
+            <span class="summary-cell">{{ row.summary }}</span>
+          </Tooltip>
+        </template>
+        <template #empty>
+          <span class="dropped-empty">最近 24 小时没有未匹配的告警</span>
+        </template>
+      </Table>
     </Card>
 
     <Row :gutter="16" class="timing-row">
@@ -105,12 +168,18 @@
 
 <script setup>
 import { ref, onMounted, onUnmounted, defineComponent, h, watch } from 'vue'
+import { useRouter } from 'vue-router'
 import request from '../api/request.js'
 import LineChart from '../components/LineChart.vue'
 import { prettyJson } from '../utils/json'
 
-const stats = ref({ total: 0, success: 0, failed: 0, deadLetters: 0 })
+const router = useRouter()
+const stats = ref({ total: 0, success: 0, failed: 0, deadLetters: 0, silenced: 0, unmatched: 0, silencedRules: 0 })
 const recentAlerts = ref([])
+// #AI-CODE-FUNCTION-dev_release/v0.0.1-20260917: alerts dropped at the gateway, either by a silenced rule or because
+// no rule matched — both panels share the same row shape
+const silencedAlerts = ref([])
+const unmatchedAlerts = ref([])
 const timing = ref({ gatewayProcessMs: {}, mqTransitMs: {}, workerProcessMs: {} })
 const loading = ref(false)
 const chart = ref({ labels: [], series: [] })
@@ -151,11 +220,15 @@ const statusTag = (status) => {
     DELIVERED: { color: 'blue', text: '处理中' },
     GW_SENT: { color: 'blue', text: '已入队' },
     recieved: { color: 'blue', text: '已接收' },
-    FAILED: { color: 'red', text: '失败' }
+    FAILED: { color: 'red', text: '失败' },
+    SILENCED: { color: 'orange', text: '已静默' },
+    UNMATCHED: { color: 'default', text: '未匹配' }
   }
   const m = map[status] || { color: 'default', text: status || '-' }
   return h('Tag', { color: m.color }, () => m.text)
 }
+
+const goRules = () => router.push('/rules')
 
 const columns = [
   { title: '告警 ID', key: 'messageNo', minWidth: 190 },
@@ -175,29 +248,65 @@ const columns = [
   { title: '时间', key: 'createdAt', width: 170 }
 ]
 
+// #AI-CODE-FUNCTION-dev_release/v0.0.1-20260917: dropped rows have no channel and no delivery duration — the whole
+// point is that they never left the gateway — so the shared table shows what matched and when instead
+const droppedColumns = [
+  { title: '规则名称', key: 'ruleName', width: 170, render: (h, params) => h('span', {}, params.row.ruleName || '--') },
+  { title: '告警 ID', key: 'messageNo', width: 190 },
+  { title: '告警内容', slot: 'content', minWidth: 300 },
+  {
+    title: '状态', key: 'status', width: 100,
+    render: (h, params) => statusTag(params.row.status)
+  },
+  { title: '接收时间', key: 'createdAt', width: 165, render: (h, params) => h('span', {}, params.row.createdAt || params.row.receivedAt || '--') }
+]
+
+// #AI-CODE-FUNCTION-dev_release/v0.0.1-20260917: an unmatched alert has no rule by definition, so the rule-name column
+// would be a column of dashes — show the message number first instead
+const unmatchedColumns = [
+  { title: '告警 ID', key: 'messageNo', width: 190 },
+  { title: '告警内容', slot: 'content', minWidth: 420 },
+  {
+    title: '状态', key: 'status', width: 100,
+    render: (h, params) => statusTag(params.row.status)
+  },
+  { title: '接收时间', key: 'createdAt', width: 165, render: (h, params) => h('span', {}, params.row.createdAt || params.row.receivedAt || '--') }
+]
+
 const fetchStats = async () => {
   try {
-    const [overview, recent, timingRes, hourly] = await Promise.all([
+    const [overview, recent, timingRes, hourly, silenced, unmatched] = await Promise.all([
       request.get('/stats/overview'),
       request.get('/alerts/recent?size=10'),
       request.get('/stats/timing'),
-      request.get('/stats/24h')
+      request.get('/stats/24h'),
+      request.get('/stats/silenced?size=10'),
+      request.get('/stats/unmatched?size=10')
     ])
     stats.value = overview.data
     timing.value = timingRes.data
     recentAlerts.value = recent.data || []
+    silencedAlerts.value = silenced.data || []
+    unmatchedAlerts.value = unmatched.data || []
 
     const buckets = hourly.data || []
+    // #AI-CODE-FUNCTION-dev_release/v0.0.1-20260917: drop all-zero series so a quiet silence/unmatched line does not
+    // pad the legend; the total line always stays
+    const allSeries = [
+      { name: '总消息', color: '#7fbf9a', data: buckets.map(b => b.total), keep: true },
+      { name: '失败', color: '#d97a7a', data: buckets.map(b => b.failed) },
+      { name: '死信', color: '#d0ae6e', data: buckets.map(b => b.deadLetters) },
+      { name: '已静默', color: '#9b8fd0', data: buckets.map(b => b.silenced || 0) },
+      { name: '未匹配', color: '#7fb4c9', data: buckets.map(b => b.unmatched || 0) }
+    ]
     chart.value = {
       labels: buckets.map(b => {
         const t = b.hour.split('T')[1]?.slice(0, 5) || b.hour
         return t
       }),
-      series: [
-        { name: '总消息', color: '#7fbf9a', data: buckets.map(b => b.total) },
-        { name: '失败', color: '#d97a7a', data: buckets.map(b => b.failed) },
-        { name: '死信', color: '#d0ae6e', data: buckets.map(b => b.deadLetters) }
-      ]
+      series: allSeries
+        .filter(s => s.keep || s.data.some(v => Number(v) > 0))
+        .map(({ keep, ...s }) => s)
     }
   } catch (e) {
     console.error(e)
@@ -288,17 +397,24 @@ onUnmounted(() => {
 .stat-icon.success { background: rgba(111, 185, 138, 0.14); color: var(--aw-success); }
 .stat-icon.error { background: rgba(217, 122, 122, 0.14); color: var(--aw-error); }
 .stat-icon.warning { background: rgba(208, 174, 110, 0.14); color: var(--aw-warning); }
+/* #AI-CODE-FUNCTION-dev_release/v0.0.1-20260917: dropped-at-gateway accents, distinct from failure red */
+.stat-icon.silenced { background: rgba(155, 143, 208, 0.16); color: #9b8fd0; }
+.stat-icon.unmatched { background: rgba(127, 180, 201, 0.16); color: var(--aw-info); }
 
 .stat-title { font-size: 13px; color: var(--aw-text-secondary); margin-bottom: 2px; }
 .stat-value { font-size: 26px; font-weight: 600; color: var(--aw-text); line-height: 1.1; }
 .stat-value.success { color: var(--aw-success); }
 .stat-value.error { color: var(--aw-error); }
 .stat-value.warning { color: var(--aw-warning); }
+.stat-value.silenced { color: #9b8fd0; }
+.stat-value.unmatched { color: var(--aw-info); }
 
 .panel-card { margin-top: 16px; border-radius: 12px; }
 .panel-header { margin-bottom: 6px; }
 .panel-title { font-size: 15px; font-weight: 600; color: var(--aw-text); letter-spacing: 0.5px; }
 .panel-sub { font-size: 12px; color: var(--aw-text-faint); margin-left: 12px; }
+.panel-action { float: right; margin-top: -2px; }
+.dropped-empty { font-size: 12px; color: var(--aw-text-faint); }
 
 .timing-row { margin-top: 16px; }
 .timing-card { border-radius: 12px; }

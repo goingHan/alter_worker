@@ -56,6 +56,8 @@ AlertWorker is a transfer station that accepts alert messages and transfers them
    - Can configure multiple communication groups
    - Has an `alertType` attribute: `PROMETHEUS` or `JSON`
    - **Matching logic**: When `alertType` is `PROMETHEUS`, match by label; when `JSON`, match by `key_name`
+   - **Silence switch** (`alert_rule.silenced`, 2026-09-17): while `true`, every alert matched by the rule — **including test alerts** — is dropped at the gateway: no recipient resolution, no channel, no RabbitMQ message. The run is persisted as an `alert_message` with status `SILENCED` so the dashboard can show what the silence blocked. Toggled via `PUT /rules/{id}/silence`; audited as `SILENCE_ON` / `SILENCE_OFF`
+   - **Unmatched alerts** (2026-09-17): when *no* rule matches, the alert is dropped like a silenced one — persisted as status `UNMATCHED`, never enqueued, no retry, no dead letter — and the caller still gets `200` (`status: "UNMATCHED"`, `unmatched: true`) so upstream alerting does not re-send it forever. Counted separately from failures (`unmatched` in `/stats/overview`) and listed in the dashboard「未匹配告警」panel (`/stats/unmatched`)
    - Retry and dead-letter strategy can be configured per rule
    - **Default retry policy**: max 3 retries, exponential backoff (5s -> 10s -> 20s)
    - After all retries are exhausted, the message is written to the **dead_letter_message** table in PostgreSQL
@@ -71,6 +73,7 @@ AlertWorker is a transfer station that accepts alert messages and transfers them
       - Extract information from various data formats (Prometheus format, JSON)
       - Clean text
       - Determine who should receive the message based on the alert rule (`alertType` + label/key_name matching)
+      - If no rule matches, the alert is **dropped** (status `UNMATCHED`, counted separately, visible on the dashboard) and the caller still gets `200`
       - Determine `service_type` from the incoming alert (Prometheus label or JSON key_name)
       - Filter assignees by `service_type` and notification method preference
       - Always enqueue the prepared message to RabbitMQ (never send directly)
@@ -93,6 +96,8 @@ Message statuses (both Gateway and Worker can transition status):
 - `WORKER_SENT`: Worker sent the message to the Message Channel
 - `FAILED`: Failed to handle message
 - `success`: Successfully handled message
+- `SILENCED`: Matched a silenced rule; dropped at the gateway before any channel (terminal, never enqueued)
+- `UNMATCHED`: Matched no rule at all; dropped at the gateway (terminal, never enqueued, not a failure)
 
 Sub-statuses:
 - `gw_failed`: Gateway failed to handle message

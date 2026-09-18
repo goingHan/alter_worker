@@ -26,7 +26,7 @@ alert_message ──< dead_letter_message
 | `communication_group` | ~dozens | name, send_type (ALL/serivice_type) |
 | `group_assignee` | junction | group_id + assignee_id + channel_type (unique), service_types (JSON) |
 | `message_template` | ~dozens | name, channel_type (可选，渠道由规则绑定决定), content (Jinjava template), is_default |
-| `alert_rule` | ~dozens | name, alert_type, match_key, match_value, retry_max, retry_backoff |
+| `alert_rule` | ~dozens | name, alert_type, match_key, match_value, retry_max, retry_backoff, silenced |
 | `rule_group` | junction | rule_id + group_id (unique) |
 | `alert_rule_template` | junction | rule_id + channel_type (unique), template_id |
 | `alert_message` | high volume | payload, status, sub_status, retry_count |
@@ -38,13 +38,15 @@ alert_message ──< dead_letter_message
 
 - **Soft delete**: All main entities have `deleted SMALLINT DEFAULT 0` (1 = deleted)
 - **ID strategy**: `BIGSERIAL` / MyBatis-Plus `id-type: auto`
-- **Indexes**: `alert_message(status)`, `alert_message(api_key_id)`, `alert_message(created_at)`, `audit_log(entity_type, entity_id)`, `audit_log(created_at)`, `message_template(channel_type)`, `alert_rule(alert_type)`
+- **Rule silence**（2026-09-17 起）: `alert_rule.silenced BOOLEAN NOT NULL DEFAULT FALSE`；为 TRUE 时网关丢弃该规则匹配到的告警，落 `alert_message.status = 'SILENCED'`
+- **Dropped messages**（2026-09-17 起）: 网关丢弃的告警用独立状态区分 —— `SILENCED`（命中静默规则，`alert_rule_id` 有值）与 `UNMATCHED`（未匹配任何规则，`alert_rule_id` 为 NULL）；两者都不算 `FAILED`
+- **Indexes**: `alert_message(status)`, `alert_message(api_key_id)`, `alert_message(created_at)`, `audit_log(entity_type, entity_id)`, `audit_log(created_at)`, `message_template(channel_type)`, `alert_rule(alert_type)`, `alert_message(created_at DESC) WHERE status = 'SILENCED'`, `alert_message(created_at DESC) WHERE status = 'UNMATCHED'`
 
 ## Migration
 
 - **Tool**: Flyway 10.11
 - **Location**: `src/main/resources/db/migration/`
-- **Current**: `V1__init_schema.sql` (all 13 tables in one migration)
+- **Current**: `V10__unmatched_messages.sql`（V10：未匹配消息索引；V9：`alert_rule.silenced` + 静默消息索引；V1 含全部 13 张表）
 - **Note**: All three backend services run Flyway by default. In production, disable on gateway and worker.
 
 ## Jinjava Templates

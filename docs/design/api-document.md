@@ -82,10 +82,26 @@ The payload **must** follow the standard Prometheus Alertmanager webhook format 
 }
 ```
 
+**Dropped Response（2026-09-17 起，200）**:
+```json
+{
+  "messageId": 7,
+  "recordId": 42,
+  "status": "UNMATCHED",
+  "silenced": false,
+  "unmatched": true,
+  "recipientCount": 0,
+  "reason": "No matching alert rule"
+}
+```
+- `status = "UNMATCHED"`：没有任何规则命中 → 已直接丢弃（不重试、不进死信、不发渠道），仅落一条 `UNMATCHED` 记录供仪表盘统计
+- `status = "SILENCED"`（`silenced: true`）：命中的规则处于静默状态 → 同样直接丢弃
+- 两种情况都返回 **200**（告警已受理处理），避免上游按 `repeat_interval` 无限重发；真正失败（如持久化异常）才返回 5xx
+
 **Error Response**:
 ```json
 {
-  "error": "No matching alert rule"
+  "error": "Failed to persist alert message"
 }
 ```
 
@@ -187,6 +203,8 @@ The payload **must** be a valid JSON object with the following requirements:
 {
   "mode": "auto",
   "message": "已提交 2 条测试告警",
+  "silencedCount": 0,
+  "unmatchedCount": 0,
   "results": [
     {
       "ruleId": 1,
@@ -197,6 +215,8 @@ The payload **must** be a valid JSON object with the following requirements:
       "recordId": 42,
       "recipientCount": 2,
       "success": true,
+      "silenced": false,
+      "unmatched": false,
       "error": null
     }
   ]
@@ -206,6 +226,7 @@ The payload **must** be a valid JSON object with the following requirements:
 - `auto` 模式：为每条选中规则生成随机报文（Prometheus 生成 Alertmanager webhook 结构，JSON 生成平铺键值，规则条件里的字段会填入示例值），跳过 matcher 直接使用该规则
 - `payload` 模式：报文交给真实 `AlertRuleMatcher` 匹配，`matchedRule*` 为实际命中的规则
 - `apiKeyId` 自动取第一条未删除的 API 密钥（无密钥时返回 400）
+- `silenced` / `unmatched`（2026-09-17 起）：该条测试告警是否被丢弃 —— 前者是规则处于静默，后者是报文（`payload` 模式）没命中任何规则；`message` 与 `silencedCount` / `unmatchedCount` 会一并说明丢弃数量，前端结果列分别显示「已静默丢弃」「未匹配丢弃」而不是「已提交」
 
 ---
 
@@ -393,6 +414,7 @@ The payload **must** be a valid JSON object with the following requirements:
 
 #### List Rules
 - **GET** `/pw/alertworker/dm/api/v1/rules?current=1&size=20`
+- 过滤参数：`name`（模糊）、`alertType`（`PROMETHEUS`/`JSON`）、`silenced`（`true`/`false`，2026-09-17 起）
 
 #### Get Rule
 - **GET** `/pw/alertworker/dm/api/v1/rules/{id}`
@@ -410,11 +432,13 @@ The payload **must** be a valid JSON object with the following requirements:
   "matchConditions": "[{\"key\":\"alertname\",\"value\":\"CPUHigh\",\"op\":\"AND\"},{\"key\":\"severity\",\"value\":\"critical\",\"op\":\"AND\"},{\"key\":\"env\",\"value\":\"prod\",\"op\":\"NOT\"}]",
   "channelIds": [3, 5],
   "retryMax": 3,
-  "retryBackoff": "5,10,20"
+  "retryBackoff": "5,10,20",
+  "silenced": false
 }
 ```
 
 - `channelIds`（2026-09-16 起，Create/Update 均支持）：规则绑定的消息渠道 id 数组，可空；**全量替换**语义 —— 不传（null）= 不改动绑定，空数组 = 解除全部绑定（走渠道类型默认通道）
+- `silenced`（2026-09-17 起）：规则静默开关，默认 `false`。为 `true` 时该规则匹配到的告警在网关直接丢弃（不解析接收人、不发送任何渠道），只落一条 `SILENCED` 状态的 `alert_message` 供仪表盘展示
 
 **匹配条件逻辑**（2026-09-16 起）：
 - `matchConditions`：JSON 数组，每项 `{key, value, op?}`；`op` ∈ `AND`（且）/ `OR`（或）/ `NOT`（非，等价于「且非」）
@@ -424,6 +448,17 @@ The payload **must** be a valid JSON object with the following requirements:
 
 #### Update Rule
 - **PUT** `/pw/alertworker/dm/api/v1/rules/{id}`
+- 未传 `silenced` 时沿用数据库当前值；**开启/关闭静默建议用下面的专用接口**，避免普通编辑误翻转开关
+
+#### Silence / Resume Rule（静默开关，2026-09-17 起）
+- **PUT** `/pw/alertworker/dm/api/v1/rules/{id}/silence`
+- **Body**: `{"silenced": true, "reason": "变更窗口临时降噪"}`（`reason` 仅入审计日志）
+- **Response**: 更新后的规则对象（含 `silenced`）
+- 语义：`silenced = true` 时，该规则匹配到的**所有**告警 —— 含规则页的「测试告警」—— 在网关摄取阶段被丢弃：
+  - 不解析接收人、不解析渠道、不写入 RabbitMQ
+  - 落一条 `alert_message`，`status = SILENCED`、`finished_at` = 丢弃时刻，报文原文照存
+  - 提交方仍收到 `200`（告警已被受理处理），响应体 `status` = `SILENCED`、`silenced` = `true`
+  - 审计日志记录 `SILENCE_ON` / `SILENCE_OFF`
 
 #### Delete Rule
 - **DELETE** `/pw/alertworker/dm/api/v1/rules/{id}`
@@ -625,11 +660,51 @@ eventSource.addEventListener('alerts', (e) => {
   "matchValue": "CPUHigh",
   "retryMax": 3,
   "retryBackoff": "5,10,20",
+  "silenced": false,
   "createdAt": "2026-04-16T10:00:00",
   "updatedAt": "2026-04-16T10:00:00",
   "deleted": 0
 }
 ```
+
+---
+
+## Dashboard Stats
+
+#### 24h Overview
+- **GET** `/pw/alertworker/dm/api/v1/stats/overview`
+- **Response（2026-09-17 起新增后三项）**:
+```json
+{
+  "total": 1280,
+  "success": 1201,
+  "failed": 12,
+  "deadLetters": 3,
+  "silenced": 64,
+  "unmatched": 8,
+  "silencedRules": 2
+}
+```
+- `silenced`：最近 24 小时被静默规则丢弃的告警数（`status = SILENCED`，已包含在 `total` 内、不计入 `success`）
+- `unmatched`：最近 24 小时没有命中任何规则、已直接丢弃的告警数（`status = UNMATCHED`，同样计入 `total`、不计入 `success`/`failed`）
+- `silencedRules`：当前处于静默状态的规则数（全量，不限时间窗）
+
+#### 24h Hourly Trend
+- **GET** `/pw/alertworker/dm/api/v1/stats/24h`
+- 每个桶：`{hour, total, failed, deadLetters, silenced, unmatched}`（后两项为 2026-09-17 起新增）
+
+#### Recent Silenced Messages
+- **GET** `/pw/alertworker/dm/api/v1/stats/silenced?size=10`（`size` 上限 100）
+- **Response**: `[{id, messageNo, alertRuleId, ruleName, status, summary, fullContent, receivedAt, createdAt}]`
+- 按 `created_at` 倒序；`summary` 为报文摘要（≤200 字符），完整报文在 `fullContent`
+
+#### Recent Unmatched Messages（未匹配告警，2026-09-17 起）
+- **GET** `/pw/alertworker/dm/api/v1/stats/unmatched?size=10`（`size` 上限 100）
+- **Response**: 同上结构，但 `alertRuleId` / `ruleName` 恒为 `null`（未匹配就是没有规则）
+- 用途：仪表盘「未匹配告警」面板 —— 出现即说明有告警没人接，通常是缺规则或匹配 key/值写错
+
+#### Timing Stats
+- **GET** `/pw/alertworker/dm/api/v1/stats/timing`
 
 ---
 
@@ -654,6 +729,8 @@ eventSource.addEventListener('alerts', (e) => {
 - `WORKER_SENT`
 - `FAILED`
 - `success`
+- `SILENCED`（2026-09-17 起：命中静默规则后在网关被丢弃的终态，不会出现在 MQ / Worker 侧）
+- `UNMATCHED`（2026-09-17 起：没有命中任何规则、在网关直接丢弃的终态，不重试、不进死信）
 
 ### MessageSubStatus
 - `gw_failed`
