@@ -53,10 +53,17 @@ SSE 的 token 从 localStorage 读取（`History.vue:164`），不走 axios。
 
 | UI 区域 | 模板行 | 逻辑 |
 |---|---|---|
-| 动态背景 canvas（星空/萤火/流星） | `3-5` | `initCanvas` `120-230`；GSAP 入场动画 `onMounted` `108-115` |
-| 登录表单 + 提交 | `12-26` | `handleLogin` `59-82`（POST `/auth/login`，成功后存 token 跳转） |
+| 环境背景 canvas（夜空/薄雾/星空/萤火/流星/守望者/狐/猫头鹰） | `3-4` | `initCanvas` `133-437`；GSAP 入场动画 `onMounted` `104-107` |
+| Canvas UI 位移特效包裹层（`<Displacement class="login-card-wrap">`，12 个 props） | `6-21` | 组件 `components/canvasui/Displacement.vue`；native / 降级分支在组件内切换 |
+| 被捕获内容层（`.login-card`：透明，`ref="cardRef"`） | `22-43` | 品牌块 + 登录表单；`cardRef` 声明 `62` |
+| 静态玻璃壳（`.login-card-wrap`：背景、`backdrop-filter`、inset 描边、阴影、`z-index: 3`） | 样式 `479-492` | 位于被捕获子树**之外**，毛玻璃不被栅格化破坏 |
+| 尺寸测量绑定（`ResizeObserver` + `wrapStyle` computed） | — | `onMounted` `109-119`、`onUnmounted` `441`；`wrapStyle` `66-71` |
+| 登录表单 + 提交 | `32-42` | `handleLogin` `82-100`（POST `/pw/alertworker/dm/api/v1/auth/login`，成功后存 token 跳转） |
 
 - 默认账号 `admin/admin123`（后端 `AuthController`，可用 `ADMIN_USERNAME/ADMIN_PASSWORD` 覆盖）
+- **尺寸测量为什么存在**：特效把卡片捕获进绝对定位的 canvas（`Displacement.vue` 原生分支），包裹层没有任何 in-flow 内容、高度归零，所以必须用 `ResizeObserver` 量出卡片尺寸再绑回 `wrapStyle`，不能靠文档流自动撑开
+- **flag 门槛 + 优雅降级（重要）**：位移特效依赖实验性 WICG HTML-in-Canvas API，运行时由 `supportsHtmlInCanvas()`（`displacement-engine.js:68`）探测 `ctx.drawElementImage` + `canvas.requestPaint`。Chrome 需开 `chrome://flags/#canvas-draw-element`（等价于 `--enable-features=CanvasDrawElement`）；生产需绑定域名的 Chrome origin-trial token（当前刻意未做，owner 决策）。**无该 API 时组件按设计降级**：内容以普通 HTML 渲染、无任何报错。复测注意：无 flag 时 Blink 把 canvas 兜底子节点按 0×0 布局，包裹层高度归零——仅 stub 栅格化方法不足以走通原生路径，必须真正开 flag
+- **特效只包裹登录卡片**，环境背景场景（`initCanvas`）与 GSAP 入场保持原样
 
 ### 4.2 Dashboard（`/`）— `views/Dashboard.vue`
 
@@ -139,6 +146,7 @@ SSE 的 token 从 localStorage 读取（`History.vue:164`），不走 axios。
 | 「告警没发出来 / 群里收不到但历史有记录」 | 先看规则是否被静默：`Rules.vue` 静默列/`toggleSilence` → `/rules/{id}/silence` → 网关 `AlertIngestService.ingest` 静默分支；历史页状态筛选 `SILENCED` |
 | 「仪表盘「已静默」卡片或面板是空的」 | `/stats/overview` 的 `silenced` + `/stats/silenced`；确认 24h 窗口内确有 `status = SILENCED` 记录（`alert_message`） |
 | 「有告警进来但没人收到、历史里状态是「未匹配」」 | 没有任何规则命中 → 网关直接丢弃（`AlertIngestService.ingest` 的 `rule == null` 分支）；查 `Dashboard.vue` 未匹配面板确认报文的 labels/keys，再去 `Rules.vue` 补规则或修匹配条件 |
+| 「登录页卡片没有位移特效 / 特效不生效」 | 特效依赖实验性 **HTML-in-Canvas** API：`supportsHtmlInCanvas()`（`components/canvasui/displacement-engine.js:68`）探测 `ctx.drawElementImage` + `canvas.requestPaint`。Chrome 需开 `chrome://flags/#canvas-draw-element`（等价 `--enable-features=CanvasDrawElement`）；生产需绑定域名的 origin-trial token（当前未做）。**无 API 时按设计优雅降级为普通 HTML、不报错**——先确认浏览器满足条件，再看 `components/canvasui/Displacement.vue` 的原生/降级分支 |
 
 ## 6.5 静默功能（2026-09-17 新增）
 
@@ -187,6 +195,9 @@ frontend/src/api/request.js             请求封装、token、401 跳登录
 frontend/src/theme/index.js             主题注册表
 frontend/src/styles/theme.css           主题变量 + view-ui-plus 覆盖
 frontend/src/components/LineChart.vue   自研 SVG 折线图
+frontend/src/components/canvasui/rect-cache.js       矩形缓存（避免指针扫过时强制重排）
+frontend/src/components/canvasui/displacement-engine.js  WebGL2 位移特效引擎（框架无关，纯 JS）
+frontend/src/components/canvasui/Displacement.vue     Vue 3 包裹组件（12 个 props）
 frontend/src/views/{页面名}.vue         11 个页面，见速查表
 frontend/vite.config.js                 开发代理
 ```

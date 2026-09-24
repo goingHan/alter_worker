@@ -7,6 +7,7 @@
 - **Vue 3** (Composition API) + Vite 5
 - **View UI Plus** (iView) — UI component library
 - **GSAP** — motion/animation library
+- **Canvas UI Displacement** (WebGL2 + GLSL) — login card effect; needs the experimental HTML-in-Canvas API (Chrome `--enable-features=CanvasDrawElement` or an origin trial), otherwise degrades to plain HTML
 - **Axios** — HTTP client
 - **Vue Router 4** — SPA routing
 
@@ -58,3 +59,6 @@ npm run build    # Output to dist/ for nginx/CDN deployment
 ## Key File
 
 `vite.config.js` — dev proxy `/api` → `http://localhost:8080`
+`frontend/src/components/canvasui/rect-cache.js` — cached element-rect helper (avoids forced layout on pointer sweep)
+`frontend/src/components/canvasui/displacement-engine.js` — framework-agnostic WebGL2 displacement engine (pure JS)
+`frontend/src/components/canvasui/Displacement.vue` — Vue 3 wrapper component (12 props)
