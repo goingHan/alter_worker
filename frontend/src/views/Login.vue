@@ -3,7 +3,23 @@
     <canvas ref="canvas" class="bg-canvas"></canvas>
     <div class="aurora"></div>
 
-    <div class="login-card" :style="{ opacity: ready ? 1 : 0, transform: ready ? 'translateY(0)' : 'translateY(24px)' }">
+    <Displacement
+      class="login-card-wrap"
+      :style="wrapStyle"
+      :grid="24"
+      :cell-aspect="1"
+      :radius="0.14"
+      :strength="0.12"
+      :threshold="900"
+      :relaxation="0.9"
+      :shift="1.1"
+      :aberration="1.6"
+      :grain="0.08"
+      :grain-size="1"
+      :grain-speed="1"
+      :scramble="0.8"
+    >
+      <div ref="cardRef" class="login-card">
       <div class="brand">
         <div class="brand-mark">
           <span class="brand-ring"></span>
@@ -24,23 +40,35 @@
           进入守望台
         </Button>
       </Form>
-    </div>
+      </div>
+    </Displacement>
 
     <p class="footer-line">AlertWorker · 守望每一次告警，静候每一个黎明</p>
   </div>
 </template>
 
 <script setup>
-import { ref, onMounted, onUnmounted } from 'vue'
+import { ref, computed, onMounted, onUnmounted } from 'vue'
 import { useRouter, useRoute } from 'vue-router'
 import axios from 'axios'
 import { Message } from 'view-ui-plus'
 import { gsap } from 'gsap'
 import { setAuth } from '../utils/auth'
+import Displacement from '../components/canvasui/Displacement.vue'
 
 const router = useRouter()
 const route = useRoute()
 const canvas = ref(null)
+const cardRef = ref(null)
+const cardSize = ref({ w: 0, h: 0 })
+let cardObserver = null
+
+const wrapStyle = computed(() => ({
+  width: cardSize.value.w ? cardSize.value.w + 'px' : undefined,
+  height: cardSize.value.h ? Math.ceil(cardSize.value.h) + 'px' : undefined,
+  opacity: ready.value ? 1 : 0,
+  transform: ready.value ? 'translateY(0)' : 'translateY(24px)'
+}))
 const ready = ref(false)
 const loading = ref(false)
 const formRef = ref(null)
@@ -78,6 +106,17 @@ onMounted(() => {
   gsap.fromTo('.brand-slogan', { opacity: 0 }, { opacity: 1, duration: 1.2, delay: 0.6 })
   gsap.to('.brand-ring', { rotate: 360, duration: 24, repeat: -1, ease: 'none' })
   initCanvas()
+  // #AI-CODE-FUNCTION-dev_release/v0.0.1-20260924: the effect captures the card into an absolutely positioned canvas, so the wrapper cannot size from flow - measure and bind it
+  const cardEl = cardRef.value
+  if (cardEl) {
+    const measure = () => {
+      const rect = cardEl.getBoundingClientRect()
+      cardSize.value = { w: rect.width, h: rect.height }
+    }
+    measure()
+    cardObserver = new ResizeObserver(measure)
+    cardObserver.observe(cardEl)
+  }
 })
 
 let rafId = null
@@ -399,6 +438,7 @@ const initCanvas = () => {
 
 onUnmounted(() => {
   if (rafId) cancelAnimationFrame(rafId)
+  if (cardObserver) cardObserver.disconnect()
 })
 </script>
 
@@ -436,18 +476,31 @@ onUnmounted(() => {
   50% { opacity: 1; }
 }
 
-.login-card {
+.login-card-wrap {
   position: relative;
   z-index: 3;
+  box-sizing: border-box;
   width: 400px;
   max-width: calc(100vw - 48px);
-  padding: 44px 40px 34px;
   border-radius: 18px;
   background: rgba(17, 34, 26, 0.72);
-  border: 1px solid rgba(110, 175, 138, 0.22);
-  box-shadow: 0 18px 60px rgba(0, 0, 0, 0.5), inset 0 1px 0 rgba(170, 220, 190, 0.08);
+  /* 1px border -> inset ring: a border would sit between the wrapper's border box and the
+     captured canvas (inset: 0 resolves to the padding box) and clip the captured card by 1px. */
+  box-shadow: 0 18px 60px rgba(0, 0, 0, 0.5), inset 0 0 0 1px rgba(110, 175, 138, 0.22), inset 0 1px 0 rgba(170, 220, 190, 0.08);
   backdrop-filter: blur(14px);
   transition: opacity 0.9s ease, transform 0.9s ease;
+}
+
+.login-card {
+  position: relative;
+  box-sizing: border-box;
+  width: 100%;
+  padding: 44px 40px 34px;
+  background: transparent;
+  border: none;
+  border-radius: 0;
+  box-shadow: none;
+  backdrop-filter: none;
 }
 
 .brand {
