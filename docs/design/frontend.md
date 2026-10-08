@@ -7,7 +7,7 @@
 - **Vue 3** (Composition API) + Vite 5
 - **View UI Plus** (iView) — UI component library
 - **GSAP** — motion/animation library
-- **Canvas UI Displacement** (WebGL2 + GLSL) — login card effect; needs the experimental HTML-in-Canvas API (Chrome `--enable-features=CanvasDrawElement` or an origin trial), otherwise degrades to plain HTML
+- **Canvas UI Displacement** (SVG filter + WebGL2) — login card effect. The default `filter` engine warps the live DOM with `feDisplacementMap` and runs in any modern browser; the WebGL2/HTML-in-Canvas engine is opt-in (`engine="canvas"`/`"auto"`) and needs Chrome `--enable-features=CanvasDrawElement` or an origin trial
 - **Axios** — HTTP client
 - **Vue Router 4** — SPA routing
 
@@ -60,5 +60,6 @@ npm run build    # Output to dist/ for nginx/CDN deployment
 
 `vite.config.js` — dev proxy `/api` → `http://localhost:8080`
 `frontend/src/components/canvasui/rect-cache.js` — cached element-rect helper (avoids forced layout on pointer sweep)
-`frontend/src/components/canvasui/displacement-engine.js` — framework-agnostic WebGL2 displacement engine (pure JS)
-`frontend/src/components/canvasui/Displacement.vue` — Vue 3 wrapper component (12 props)
+`frontend/src/components/canvasui/svg-displacement.js` — default engine: SVG `feDisplacementMap` over the live DOM (flag-free)
+`frontend/src/components/canvasui/displacement-engine.js` — framework-agnostic WebGL2 displacement engine (needs the experimental HTML-in-Canvas API)
+`frontend/src/components/canvasui/Displacement.vue` — Vue 3 wrapper component (13 props; `engine` picks the engine)

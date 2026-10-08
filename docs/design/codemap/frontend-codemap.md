@@ -1,7 +1,7 @@
 # 前端代码地图（Frontend CodeMap）
 
 > 用途：用户口述「哪个页面、哪个区域、什么现象」时，按此文档直接定位到文件与行号，无需全量扫描。
-> 行号锚点基于 2026-08-31 的代码快照，改动后如有偏差用 `grep 函数名` 兜底。
+> 行号锚点基于 2026-08-31 的代码快照（`Login.vue` 于 2026-09-24 因新增 `engine` prop 整体下移 1 行），改动后如有偏差用 `grep 函数名` 兜底。
 
 ## 1. 页面 → 文件速查表
 
@@ -53,16 +53,20 @@ SSE 的 token 从 localStorage 读取（`History.vue:164`），不走 axios。
 
 | UI 区域 | 模板行 | 逻辑 |
 |---|---|---|
-| 环境背景 canvas（夜空/薄雾/星空/萤火/流星/守望者/狐/猫头鹰） | `3-4` | `initCanvas` `133-437`；GSAP 入场动画 `onMounted` `104-107` |
-| Canvas UI 位移特效包裹层（`<Displacement class="login-card-wrap">`，12 个 props） | `6-21` | 组件 `components/canvasui/Displacement.vue`；native / 降级分支在组件内切换 |
-| 被捕获内容层（`.login-card`：透明，`ref="cardRef"`） | `22-43` | 品牌块 + 登录表单；`cardRef` 声明 `62` |
-| 静态玻璃壳（`.login-card-wrap`：背景、`backdrop-filter`、inset 描边、阴影、`z-index: 3`） | 样式 `479-492` | 位于被捕获子树**之外**，毛玻璃不被栅格化破坏 |
-| 尺寸测量绑定（`ResizeObserver` + `wrapStyle` computed） | — | `onMounted` `109-119`、`onUnmounted` `441`；`wrapStyle` `66-71` |
-| 登录表单 + 提交 | `32-42` | `handleLogin` `82-100`（POST `/pw/alertworker/dm/api/v1/auth/login`，成功后存 token 跳转） |
+| 环境背景 canvas（夜空/薄雾/星空/萤火/流星/守望者/狐/猫头鹰） | `3-4` | `initCanvas` `134-438`；GSAP 入场动画 `onMounted` `103-109` |
+| Canvas UI 位移特效包裹层（`<Displacement class="login-card-wrap" engine="filter">`，13 个 props） | `6-22` | 组件 `components/canvasui/Displacement.vue`；`engine` 决定用 SVG 滤镜引擎（默认）还是 HTML-in-Canvas 引擎 |
+| 被形变的内容层（`.login-card`：透明，`ref="cardRef"`） | `23-44` | 品牌块 + 登录表单；`cardRef` 声明 `63` |
+| 静态玻璃壳（`.login-card-wrap`：背景、`backdrop-filter`、inset 描边、阴影、`z-index: 3`） | 样式 `480-493` | 位于被形变子树**之外**，毛玻璃不被栅格化破坏 |
+| 尺寸测量绑定（`ResizeObserver` + `wrapStyle` computed） | — | `onMounted` `110-120`、`onUnmounted` `440-443`；`wrapStyle` `67-72` |
+| 登录表单 + 提交 | `33-43` | `handleLogin` `83-101`（POST `/pw/alertworker/dm/api/v1/auth/login`，成功后存 token 跳转） |
 
 - 默认账号 `admin/admin123`（后端 `AuthController`，可用 `ADMIN_USERNAME/ADMIN_PASSWORD` 覆盖）
-- **尺寸测量为什么存在**：特效把卡片捕获进绝对定位的 canvas（`Displacement.vue` 原生分支），包裹层没有任何 in-flow 内容、高度归零，所以必须用 `ResizeObserver` 量出卡片尺寸再绑回 `wrapStyle`，不能靠文档流自动撑开
-- **flag 门槛 + 优雅降级（重要）**：位移特效依赖实验性 WICG HTML-in-Canvas API，运行时由 `supportsHtmlInCanvas()`（`displacement-engine.js:68`）探测 `ctx.drawElementImage` + `canvas.requestPaint`。Chrome 需开 `chrome://flags/#canvas-draw-element`（等价于 `--enable-features=CanvasDrawElement`）；生产需绑定域名的 Chrome origin-trial token（当前刻意未做，owner 决策）。**无该 API 时组件按设计降级**：内容以普通 HTML 渲染、无任何报错。复测注意：无 flag 时 Blink 把 canvas 兜底子节点按 0×0 布局，包裹层高度归零——仅 stub 栅格化方法不足以走通原生路径，必须真正开 flag
+- **尺寸测量为什么存在**：`engine="canvas"` 分支把卡片捕获进绝对定位的 canvas，包裹层没有任何 in-flow 内容、高度归零，必须用 `ResizeObserver` 量出卡片尺寸再绑回 `wrapStyle`；默认的 `filter` 分支本身能撑开，但仍复用同一个测量盒子，两条引擎的几何一致
+- **两套引擎（重要，2026-09-24 变更）**：`Displacement.vue` 的 `engine` prop 决定走哪条路，默认 `filter`
+  - `filter`（默认，`components/canvasui/svg-displacement.js`）：**不依赖任何实验特性**，在 Chrome/Edge/Firefox/Safari 都能跑。把同一套指针驱动的网格场写进一张 24×26 的 PNG（`<feImage>` data URL），用 `feDisplacementMap` 直接形变**活的 DOM**，因此输入框的焦点、光标、命中测试都不受影响；只在移动时给内容层挂 `filter: url(#aw-displacement-N)`，静止时摘掉，文字恢复清晰、零开销
+  - `canvas`（`components/canvasui/displacement-engine.js`）：原 WICG HTML-in-Canvas + WebGL2 路径，效果更精细（float 位移贴图、边缘 clamp 采样），但需要 `chrome://flags/#canvas-draw-element`（Canary 还要 `#enable-experimental-web-platform-features`）/ 生产 origin-trial token。用 `supportsHtmlInCanvas()`（`displacement-engine.js:68`）探测 `ctx.drawElementImage` + `canvas.requestPaint`
+  - `auto` = 有实验 API 就用 `canvas`，否则 `filter`；`canvas` 拿不到 WebGL2 上下文时也会自动退回 `filter`。引擎在 setup 阶段一次性选定，避免切换分支导致登录表单被重新挂载
+- **两套引擎的差异（调参前先看）**：`filter` 引擎的位移在约 18% 卡片尺寸处饱和（`MAP_HEADROOM`），而 canvas 引擎无上限、采样被 clamp 到边缘；`filter` 的区域就是卡片 border box，位移不会溢出玻璃壳；`scramble` 入场涟漪在 filter 引擎里被限制在 ±26px 左右
 - **特效只包裹登录卡片**，环境背景场景（`initCanvas`）与 GSAP 入场保持原样
 
 ### 4.2 Dashboard（`/`）— `views/Dashboard.vue`
@@ -146,7 +150,7 @@ SSE 的 token 从 localStorage 读取（`History.vue:164`），不走 axios。
 | 「告警没发出来 / 群里收不到但历史有记录」 | 先看规则是否被静默：`Rules.vue` 静默列/`toggleSilence` → `/rules/{id}/silence` → 网关 `AlertIngestService.ingest` 静默分支；历史页状态筛选 `SILENCED` |
 | 「仪表盘「已静默」卡片或面板是空的」 | `/stats/overview` 的 `silenced` + `/stats/silenced`；确认 24h 窗口内确有 `status = SILENCED` 记录（`alert_message`） |
 | 「有告警进来但没人收到、历史里状态是「未匹配」」 | 没有任何规则命中 → 网关直接丢弃（`AlertIngestService.ingest` 的 `rule == null` 分支）；查 `Dashboard.vue` 未匹配面板确认报文的 labels/keys，再去 `Rules.vue` 补规则或修匹配条件 |
-| 「登录页卡片没有位移特效 / 特效不生效」 | 特效依赖实验性 **HTML-in-Canvas** API：`supportsHtmlInCanvas()`（`components/canvasui/displacement-engine.js:68`）探测 `ctx.drawElementImage` + `canvas.requestPaint`。Chrome 需开 `chrome://flags/#canvas-draw-element`（等价 `--enable-features=CanvasDrawElement`）；生产需绑定域名的 origin-trial token（当前未做）。**无 API 时按设计优雅降级为普通 HTML、不报错**——先确认浏览器满足条件，再看 `components/canvasui/Displacement.vue` 的原生/降级分支 |
+| 「登录页卡片没有位移特效 / 特效不生效」 | 默认走 `engine="filter"`（`components/canvasui/svg-displacement.js`），不依赖实验特性，任何现代浏览器都该有效果——先按下面顺序排查：① 移动要够快（`:threshold="900"` 是 px/s 门槛，慢慢划过卡片不会触发）；② 打开控制台看有没有 `[canvasui] SVG displacement is unavailable`（构造 filter 抛错时会保持普通 HTML）；③ Elements 面板里移动时应能看到内容层临时挂上 `filter: url(#aw-displacement-1)`，静止后消失（没有 filter 节点就是引擎没起来）；④ 只有显式写了 `engine="canvas"`/`"auto"` 时才依赖实验性 **HTML-in-Canvas** API：`supportsHtmlInCanvas()`（`displacement-engine.js:68`）探测 `ctx.drawElementImage` + `canvas.requestPaint`，Chrome 需 `chrome://flags/#canvas-draw-element`（Canary 再加 `#enable-experimental-web-platform-features`），探测不到会自动退回 `filter` |
 
 ## 6.5 静默功能（2026-09-17 新增）
 
@@ -196,8 +200,9 @@ frontend/src/theme/index.js             主题注册表
 frontend/src/styles/theme.css           主题变量 + view-ui-plus 覆盖
 frontend/src/components/LineChart.vue   自研 SVG 折线图
 frontend/src/components/canvasui/rect-cache.js       矩形缓存（避免指针扫过时强制重排）
-frontend/src/components/canvasui/displacement-engine.js  WebGL2 位移特效引擎（框架无关，纯 JS）
-frontend/src/components/canvasui/Displacement.vue     Vue 3 包裹组件（12 个 props）
+frontend/src/components/canvasui/svg-displacement.js SVG feDisplacementMap 位移引擎（默认，全浏览器可用）
+frontend/src/components/canvasui/displacement-engine.js  WebGL2 位移特效引擎（框架无关，纯 JS，需实验 API）
+frontend/src/components/canvasui/Displacement.vue     Vue 3 包裹组件（13 个 props，engine 选择引擎）
 frontend/src/views/{页面名}.vue         11 个页面，见速查表
 frontend/vite.config.js                 开发代理
 ```

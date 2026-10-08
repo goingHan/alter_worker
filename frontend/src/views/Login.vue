@@ -6,6 +6,7 @@
     <Displacement
       class="login-card-wrap"
       :style="wrapStyle"
+      engine="filter"
       :grid="24"
       :cell-aspect="1"
       :radius="0.14"
@@ -106,7 +107,8 @@ onMounted(() => {
   gsap.fromTo('.brand-slogan', { opacity: 0 }, { opacity: 1, duration: 1.2, delay: 0.6 })
   gsap.to('.brand-ring', { rotate: 360, duration: 24, repeat: -1, ease: 'none' })
   initCanvas()
-  // #AI-CODE-FUNCTION-dev_release/v0.0.1-20260924: the effect captures the card into an absolutely positioned canvas, so the wrapper cannot size from flow - measure and bind it
+  // #AI-CODE-FUNCTION-dev_release/v0.0.1-20260924: the canvas engine captures the card into an absolutely positioned
+  // canvas, so the wrapper cannot size from flow and both engines share one measured box - measure and bind it
   const cardEl = cardRef.value
   if (cardEl) {
     const measure = () => {
@@ -123,10 +125,13 @@ let rafId = null
 let stars = []
 let fireflies = []
 let shooters = []
+let tufts = []
 let width = 0
 let height = 0
 let time = 0
 let reduceMotion = false
+// one reference scale keeps every silhouette in proportion on any window size
+let S = 1
 
 const SILH = '#050b08'
 
@@ -160,9 +165,752 @@ const initCanvas = () => {
         speed: Math.random() * 0.02 + 0.008
       })
     }
+    // foreground grass — seeded last so the tufts sit in front of every silhouette
+    for (let i = 0; i < 30; i++) {
+      const blades = []
+      const n = 3 + Math.floor(Math.random() * 3)
+      for (let b = 0; b < n; b++) {
+        blades.push({
+          dx: (Math.random() - 0.5) * 26,
+          len: 16 + Math.random() * 40,
+          lean: (Math.random() - 0.5) * 0.6,
+          phase: Math.random() * Math.PI * 2
+        })
+      }
+      tufts.push({
+        x: Math.random() * width,
+        y: groundY() + 2 + Math.random() * (height - groundY() - 2),
+        s: 0.55 + Math.random() * 0.9,
+        alpha: 0.35 + Math.random() * 0.5,
+        blades,
+        phase: Math.random() * Math.PI * 2
+      })
+    }
   }
 
   const groundY = () => height * 0.85
+  // gentle rolling horizon — the ground is a curve, not a hard line
+  const hillY = (x) => groundY() + Math.sin((x / Math.max(width, 1)) * Math.PI * 1.7) * height * 0.012
+
+  // ---------------------------------------------------------------- sky
+
+  // A scratch canvas big enough for one moon face. The crescent is cut out here rather than on
+  // the scene canvas, because destination-out would punch a hole through the night sky too.
+  const moonBuf = document.createElement('canvas')
+
+  const drawMoon = () => {
+    // A crescent, not a disc: the full face is painted with its maria, then the dark limb is
+    // erased for real, so the night sky shows through the bite instead of a flat sky-coloured
+    // patch sitting on top of the background gradient.
+    // Kept small and set slightly right of centre so the figure on the ground reads as looking
+    // up at it rather than standing under a lamp.
+    const mx = width * 0.885
+    const my = height * 0.16
+    const r = height * 0.044
+
+    // soft halo hugging the lit limb, so the crescent still carries a glow
+    const hx = mx - r * 0.45
+    const hy = my - r * 0.12
+    const halo = ctx.createRadialGradient(hx, hy, r * 0.6, hx, hy, r * 7.5)
+    halo.addColorStop(0, 'rgba(214, 238, 216, 0.16)')
+    halo.addColorStop(0.26, 'rgba(172, 216, 186, 0.075)')
+    halo.addColorStop(0.62, 'rgba(140, 195, 168, 0.026)')
+    halo.addColorStop(1, 'rgba(140, 195, 168, 0)')
+
+    // slightly tilted crescent: disc minus an offset disc
+    const CA = -0.42 // keeps the horns from lining up as a mechanical vertical pair
+    const bx = Math.cos(CA) * r * 0.5
+    const by = Math.sin(CA) * r * 0.5
+
+    const pad = Math.ceil(r * 1.2)
+    const w = pad * 2 + 2
+    moonBuf.width = w
+    moonBuf.height = w
+    const m = moonBuf.getContext('2d')
+    m.clearRect(0, 0, w, w)
+    m.save()
+    m.translate(pad, pad)
+
+    // the lit face, brightest toward the outer limb
+    const disc = m.createRadialGradient(-r * 0.5, -r * 0.45, r * 0.05, 0, 0, r)
+    disc.addColorStop(0, '#f6fbf0')
+    disc.addColorStop(0.5, '#e2f0da')
+    disc.addColorStop(1, '#c2d9c0')
+    m.fillStyle = disc
+    m.beginPath()
+    m.arc(0, 0, r, 0, Math.PI * 2)
+    m.fill()
+
+    // No maria: at this size on the page they read as smudges, and a clean crescent is the
+    // stronger, quieter shape against the figure looking up at it.
+
+    // soft terminator: the lit face fades toward the dark limb instead of stopping dead
+    const term = m.createLinearGradient(-r * 0.2, 0, r * 0.55, 0)
+    term.addColorStop(0, 'rgba(30, 62, 48, 0)')
+    term.addColorStop(0.6, 'rgba(30, 62, 48, 0.3)')
+    term.addColorStop(1, 'rgba(30, 62, 48, 0.75)')
+    m.fillStyle = term
+    m.beginPath()
+    m.arc(0, 0, r, 0, Math.PI * 2)
+    m.fill()
+    m.restore()
+
+    // erase the dark limb: the bite leaves real transparency, so the sky shows through
+    m.save()
+    m.globalCompositeOperation = 'destination-out'
+    m.beginPath()
+    m.arc(pad + bx, pad + by, r * 1.02, 0, Math.PI * 2)
+    m.fill()
+    m.restore()
+
+    ctx.drawImage(moonBuf, mx - pad, my - pad)
+
+    // halo last, so the glow adds light without filling the crescent's hollow
+    ctx.fillStyle = halo
+    ctx.beginPath()
+    ctx.arc(hx, hy, r * 7.5, 0, Math.PI * 2)
+    ctx.fill()
+
+    return { x: mx, y: my, r }
+  }
+
+  const drawDistantHills = (moon) => {
+    const back = ctx.createLinearGradient(0, groundY() - height * 0.05, 0, groundY())
+    back.addColorStop(0, 'rgba(19, 44, 33, 0)')
+    back.addColorStop(1, 'rgba(19, 44, 33, 0.85)')
+    ctx.fillStyle = back
+    ctx.beginPath()
+    ctx.moveTo(0, groundY())
+    for (let x = 0; x <= width; x += width / 40) {
+      ctx.lineTo(x, groundY() - height * 0.02 - Math.sin(x / width * Math.PI * 1.3 + 0.6) * height * 0.022 - Math.sin(x / width * Math.PI * 3.1) * height * 0.008)
+    }
+    ctx.lineTo(width, groundY())
+    ctx.closePath()
+    ctx.fill()
+
+    // a far pine ridge: small, uneven, then a mist wash so it stays behind everything
+    const ridgeTiers = [[0.3, 0.24, 0.2], [0.6, 0.18, 0.18], [0.85, 0.11, 0.16]]
+    let k = 0
+    for (let x = width * 0.035; x < width * 0.99; x += width * (0.052 + (Math.sin(k * 3.1) * 0.5 + 0.5) * 0.05)) {
+      const t = x / width
+      const hs = (0.016 + (Math.sin(t * 21.3) * 0.5 + 0.5) * 0.026) * height
+      const base = groundY() - height * 0.004 - Math.sin(t * Math.PI * 1.3 + 0.6) * height * 0.02
+      drawPine(x, base, hs, `rgba(11, 29, 21, ${0.34 + (Math.sin(t * 7.7) * 0.5 + 0.5) * 0.14})`, ridgeTiers)
+      k += 1
+    }
+
+    const wash = ctx.createLinearGradient(0, groundY() - height * 0.1, 0, groundY())
+    wash.addColorStop(0, 'rgba(20, 50, 38, 0)')
+    wash.addColorStop(1, 'rgba(20, 50, 38, 0.55)')
+    ctx.fillStyle = wash
+    ctx.fillRect(0, groundY() - height * 0.1, width, height * 0.1)
+  }
+
+  // --------------------------------------------------------------- trees
+
+  // A pine reads from its tier rhythm: a wide skirt low down, tiers narrowing as they climb.
+  // `tiers` is [heightFraction, halfWidthFraction, heightFraction] — overlapping neighbours are
+  // what turn a stack of triangles into a real conifer.
+  const drawPine = (x, baseY, h, color, tiers) => {
+    ctx.fillStyle = color
+    const trunkW = Math.max(1, h * 0.03)
+    ctx.beginPath()
+    ctx.moveTo(x - trunkW, baseY)
+    ctx.lineTo(x - trunkW * 0.45, baseY - h * 0.5)
+    ctx.lineTo(x + trunkW * 0.45, baseY - h * 0.5)
+    ctx.lineTo(x + trunkW, baseY)
+    ctx.closePath()
+    ctx.fill()
+
+    tiers.forEach(([fy, fw, fh], i) => {
+      const cy = baseY - h * fy
+      const w = h * fw
+      const tw = h * fw * 0.78
+      const th = h * fh
+      const skew = h * 0.02 * Math.sin(i * 1.9 + x * 0.013)
+      // a slight left/right bias per tier keeps the outline from looking stamped
+      const bias = 1 + Math.sin(i * 2.7 + x * 0.021) * 0.08
+      ctx.beginPath()
+      ctx.moveTo(x + skew, cy - th)
+      ctx.quadraticCurveTo(x + tw * 0.5 + skew, cy - th * 0.3, x + w * bias + skew, cy + th * 0.55)
+      ctx.quadraticCurveTo(x + w * 0.5 * bias + skew, cy + th * 0.85, x + w * 0.18 + skew, cy + th * 0.92)
+      ctx.lineTo(x - w * 0.18 + skew, cy + th * 0.92)
+      ctx.quadraticCurveTo(x - w * 0.5 / bias + skew, cy + th * 0.85, x - w / bias + skew, cy + th * 0.55)
+      ctx.quadraticCurveTo(x - tw * 0.5 + skew, cy - th * 0.3, x + skew, cy - th)
+      ctx.closePath()
+      ctx.fill()
+    })
+  }
+
+  // the owl's perch, drawn over the trunk so the feet have something to grip
+  const drawPerch = (bx, by, ex, ey, w) => {
+    const cx = (bx + ex) * 0.5
+    const cy = (by + ey) * 0.5 + Math.max(10, w * 1.6)
+    ctx.strokeStyle = SILH
+    ctx.lineCap = 'round'
+    ctx.lineWidth = w
+    ctx.beginPath()
+    ctx.moveTo(bx, by)
+    ctx.quadraticCurveTo(cx, cy, ex, ey)
+    ctx.stroke()
+    // a fork near the tip, so the owl sits in the crook of a real branch
+    ctx.lineWidth = w * 0.42
+    ctx.beginPath()
+    ctx.moveTo(cx, cy - w * 0.1)
+    ctx.lineTo(ex - (ex - cx) * 0.3, ey - w * 0.5)
+    ctx.stroke()
+  }
+
+  // --------------------------------------------------------------- owl
+
+  const drawOwl = (x, y, s, tilt) => {
+    // a slow breath + the branch sway, so the bird is alive without flapping
+    const breath = 1 + Math.sin(time * 1.1) * 0.018
+    ctx.save()
+    ctx.translate(x, y)
+    ctx.rotate(tilt + Math.sin(time * 0.5) * 0.012)
+    ctx.scale(s * breath, s / breath)
+    ctx.fillStyle = SILH
+    ctx.strokeStyle = SILH
+
+    // feet gripping the branch
+    ctx.lineWidth = 1.5
+    ctx.lineCap = 'round'
+    for (const fx of [-7, 6]) {
+      ctx.beginPath()
+      ctx.moveTo(fx - 4, -4)
+      ctx.quadraticCurveTo(fx, -1.5, fx + 4, -3.4)
+      ctx.stroke()
+    }
+
+    // tail feathers
+    ctx.beginPath()
+    ctx.moveTo(-6, -8)
+    ctx.lineTo(4, -7)
+    ctx.lineTo(1, -1.5)
+    ctx.lineTo(-5, -2.5)
+    ctx.closePath()
+    ctx.fill()
+
+    // body, chest forward, shoulder softening into the head
+    ctx.beginPath()
+    ctx.moveTo(-15, -9)
+    ctx.bezierCurveTo(-22, -18, -20, -36, -12, -45)
+    ctx.bezierCurveTo(-7, -50, 7, -50, 13, -44)
+    ctx.bezierCurveTo(21, -36, 22, -18, 14, -9)
+    ctx.bezierCurveTo(9, -4, -9, -4, -15, -9)
+    ctx.closePath()
+    ctx.fill()
+
+    // folded wing sweeping down the back
+    ctx.beginPath()
+    ctx.moveTo(-11, -45)
+    ctx.bezierCurveTo(-23, -36, -24, -19, -15, -10)
+    ctx.lineTo(-2, -12)
+    ctx.bezierCurveTo(-10, -22, -11, -34, -6, -44)
+    ctx.closePath()
+    ctx.fill()
+
+    // ear tufts
+    ctx.beginPath()
+    ctx.moveTo(-13, -58)
+    ctx.lineTo(-17, -74)
+    ctx.lineTo(-3, -64)
+    ctx.closePath()
+    ctx.fill()
+    ctx.beginPath()
+    ctx.moveTo(9, -65)
+    ctx.lineTo(16, -75)
+    ctx.lineTo(17, -58)
+    ctx.closePath()
+    ctx.fill()
+
+    // head
+    ctx.beginPath()
+    ctx.ellipse(0, -58, 17, 15.5, 0, 0, Math.PI * 2)
+    ctx.fill()
+
+    // facial disc — a hair lighter so the face separates from the crown
+    ctx.fillStyle = 'rgba(10, 26, 19, 1)'
+    ctx.beginPath()
+    ctx.ellipse(0, -55, 12, 10, 0, 0, Math.PI * 2)
+    ctx.fill()
+    ctx.fillStyle = SILH
+
+    // beak
+    ctx.beginPath()
+    ctx.moveTo(0, -56)
+    ctx.lineTo(3.2, -51)
+    ctx.lineTo(-3.2, -51)
+    ctx.closePath()
+    ctx.fill()
+
+    // eyes — the brand's one warm light source on the bird
+    const blink = Math.abs(Math.sin(time * 0.33)) > 0.05 ? 1 : 0.08
+    const look = Math.sin(time * 0.22) * 1.6
+    for (const ex of [-7, 7]) {
+      ctx.fillStyle = 'rgba(150, 205, 132, 0.26)'
+      ctx.beginPath()
+      ctx.arc(ex + look, -58.5, 5.6, 0, Math.PI * 2)
+      ctx.fill()
+      ctx.fillStyle = '#c6e69c'
+      ctx.beginPath()
+      ctx.ellipse(ex + look, -58.5, 3.4, 3.4 * blink, 0, 0, Math.PI * 2)
+      ctx.fill()
+      ctx.fillStyle = '#14261a'
+      ctx.beginPath()
+      ctx.ellipse(ex + look * 1.2, -58.5, 1.5, 1.5 * blink, 0, 0, Math.PI * 2)
+      ctx.fill()
+    }
+    ctx.restore()
+  }
+
+  // --------------------------------------------------------------- fox
+
+  // A person and a fox share the open band to the right of the centred login card, facing each
+  // other. Both are drawn from their own model space; the callers below decide the band, the
+  // unit size and the anchors, so the pair stays clear of the card on any window width.
+  // A figure and a fox, both seen from BEHIND, walking away from the viewer into the night.
+  // They are deliberately small: the distance is the point, and the torch the figure carries is
+  // the only warm light in the scene. Neither is ever drawn facing the camera, so no face is
+  // needed and the whole read is silhouette.
+
+  // ---- the figure, from behind, torch arm raised
+  const drawBearer = (gx, gy, u) => {
+    // Model space: origin between the heels on the ground, +x right, +y down, 1 unit = u px.
+    // Heels (0,0) -> hips (0,-28) -> shoulders (0,-52) -> neck (0,-55.5) -> head centre (0,-60)
+    // radius 6. The torso is one continuous shape reaching down past the hips, and the legs
+    // start above that line, so no gap can open at the hips. The raised arm holds the torch out
+    // beside the head, never crossing it. Returns the flame's base point.
+    const mx = (v) => gx + v * u
+    const my = (v) => gy + v * u
+
+    ctx.save()
+    ctx.fillStyle = SILH
+    ctx.strokeStyle = SILH
+    ctx.lineJoin = 'round'
+    ctx.lineCap = 'round'
+
+    // legs, seen from behind: straight, close together, tapering toward the ankles
+    // legs, seen from behind: they start well inside the torso so the two shapes always overlap
+    ctx.lineWidth = 3.6 * u
+    ctx.beginPath()
+    ctx.moveTo(mx(-3.4), my(-30))
+    ctx.quadraticCurveTo(mx(-3.5), my(-14), mx(-3.3), my(-1.2))
+    ctx.stroke()
+    ctx.lineWidth = 3.4 * u
+    ctx.beginPath()
+    ctx.moveTo(mx(3.3), my(-30))
+    ctx.quadraticCurveTo(mx(3.4), my(-14), mx(3.4), my(-1.2))
+    ctx.stroke()
+    // feet, small wedges turning slightly out
+    ctx.beginPath()
+    ctx.ellipse(mx(-3.6), my(-1), 2.7 * u, 1.2 * u, 0.06, 0, Math.PI * 2)
+    ctx.fill()
+    ctx.beginPath()
+    ctx.ellipse(mx(3.7), my(-1), 2.7 * u, 1.2 * u, -0.06, 0, Math.PI * 2)
+    ctx.fill()
+
+    // torso: one continuous shape from the hips to the shoulders
+    ctx.beginPath()
+    ctx.moveTo(mx(-6.8), my(-25))
+    ctx.quadraticCurveTo(mx(-8.2), my(-32), mx(-8.2), my(-41))
+    ctx.bezierCurveTo(mx(-8.2), my(-48), mx(-6.8), my(-52), mx(-4), my(-52.8))
+    ctx.quadraticCurveTo(mx(0), my(-54), mx(4), my(-52.8))
+    ctx.bezierCurveTo(mx(6.8), my(-52), mx(8.2), my(-48), mx(8.2), my(-41))
+    ctx.quadraticCurveTo(mx(8.2), my(-32), mx(6.8), my(-25))
+    ctx.quadraticCurveTo(mx(0), my(-22.6), mx(-6.8), my(-25))
+    ctx.closePath()
+    ctx.fill()
+
+    // neck
+    ctx.beginPath()
+    ctx.moveTo(mx(-2.6), my(-54))
+    ctx.lineTo(mx(2.6), my(-54))
+    ctx.lineTo(mx(2.6), my(-56.6))
+    ctx.lineTo(mx(-2.6), my(-56.6))
+    ctx.closePath()
+    ctx.fill()
+
+    // head, then hair over the whole back of it with a fall to the nape
+    const hx = mx(0)
+    const hy = my(-60)
+    ctx.beginPath()
+    ctx.ellipse(hx, hy, 5.2 * u, 5.6 * u, 0, 0, Math.PI * 2)
+    ctx.fill()
+    ctx.beginPath()
+    ctx.moveTo(hx - 6 * u, hy + 0.6 * u)
+    ctx.quadraticCurveTo(hx - 6.6 * u, hy - 5.4 * u, hx - 1.4 * u, hy - 6.4 * u)
+    ctx.quadraticCurveTo(hx + 4.6 * u, hy - 6.4 * u, hx + 5.8 * u, hy - 1 * u)
+    ctx.quadraticCurveTo(hx + 5.4 * u, hy + 4.6 * u, hx + 3 * u, hy + 6.4 * u)
+    ctx.quadraticCurveTo(hx, hy + 4.6 * u, hx - 3.2 * u, hy + 5.8 * u)
+    ctx.quadraticCurveTo(hx - 6 * u, hy + 4 * u, hx - 6 * u, hy + 0.6 * u)
+    ctx.closePath()
+    ctx.fill()
+
+    // raised right arm, and the left arm hanging at the side
+    ctx.lineWidth = 2.8 * u
+    ctx.beginPath()
+    ctx.moveTo(mx(5.4), my(-50.4))
+    ctx.quadraticCurveTo(mx(8), my(-52), mx(8.4), my(-55.4))
+    ctx.stroke()
+    ctx.lineWidth = 2.3 * u
+    ctx.beginPath()
+    ctx.moveTo(mx(8.4), my(-55.4))
+    ctx.quadraticCurveTo(mx(8.6), my(-57.4), mx(8), my(-58.6))
+    ctx.stroke()
+    ctx.lineWidth = 2.4 * u
+    ctx.beginPath()
+    ctx.moveTo(mx(-5.6), my(-50))
+    ctx.quadraticCurveTo(mx(-7.6), my(-42), mx(-7), my(-33.6))
+    ctx.stroke()
+
+    // ---- the torch: staff standing in the raised hand, leaning outward, well clear of the head
+    const burn = my(-82)
+    ctx.strokeStyle = '#1d150d'
+    ctx.lineWidth = 2 * u
+    ctx.beginPath()
+    ctx.moveTo(mx(8.4), my(-55))
+    ctx.lineTo(mx(9.6), my(-80))
+    ctx.stroke()
+    // a wrap of cloth just under the flame
+    ctx.strokeStyle = '#241a10'
+    ctx.lineWidth = 2.8 * u
+    ctx.beginPath()
+    ctx.moveTo(mx(9.3), my(-76.4))
+    ctx.lineTo(mx(9.55), my(-80.4))
+    ctx.stroke()
+
+    ctx.restore()
+    return { x: mx(9.7), y: burn }
+  }
+
+  // ---- the torch flame and the warm light it throws
+  const drawTorch = (fx, fy, u) => {
+    // two slightly detuned sines give an irregular flicker rather than a pulse
+    const flick = Math.sin(time * 7.1) * 0.5 + Math.sin(time * 11.7 + 1.3) * 0.5
+    // the flame leans away from the bearer instead of back across their head
+    const sway = (1.4 + flick * 0.6) * u
+
+    // halo falling across the shoulders and the ground beyond
+    const gl = ctx.createRadialGradient(fx, fy - 1 * u, 0, fx, fy - 1 * u, 26 * u)
+    gl.addColorStop(0, 'rgba(255, 188, 104, ' + (0.24 + flick * 0.025).toFixed(3) + ')')
+    gl.addColorStop(0.3, 'rgba(238, 152, 74, 0.085)')
+    gl.addColorStop(0.64, 'rgba(214, 134, 72, 0.028)')
+    gl.addColorStop(1, 'rgba(214, 134, 72, 0)')
+    ctx.fillStyle = gl
+    ctx.beginPath()
+    ctx.arc(fx, fy - 1 * u, 26 * u, 0, Math.PI * 2)
+    ctx.fill()
+
+    // the flame: outer teardrop leaning away from the bearer, inner tongue, hot core
+    ctx.beginPath()
+    ctx.moveTo(fx + sway * 1.7, fy - 9.4 * u)
+    ctx.quadraticCurveTo(fx + 3.1 * u, fy - 2.6 * u, fx + 1.7 * u, fy + 0.6 * u)
+    ctx.quadraticCurveTo(fx - 0.2 * u, fy + 1.9 * u, fx - 1.9 * u, fy + 0.5 * u)
+    ctx.quadraticCurveTo(fx - 3.4 * u, fy - 2.8 * u, fx + sway * 1.7, fy - 9.4 * u)
+    ctx.closePath()
+    ctx.fillStyle = 'rgba(240, 176, 96, 0.95)'
+    ctx.fill()
+    ctx.beginPath()
+    ctx.moveTo(fx + sway, fy - 5.4 * u)
+    ctx.quadraticCurveTo(fx + 1.8 * u, fy - 1.6 * u, fx + 0.9 * u, fy + 0.5 * u)
+    ctx.quadraticCurveTo(fx - 0.2 * u, fy + 1.4 * u, fx - 1.1 * u, fy + 0.5 * u)
+    ctx.quadraticCurveTo(fx - 2 * u, fy - 1.7 * u, fx + sway, fy - 5.4 * u)
+    ctx.closePath()
+    ctx.fillStyle = '#ffdfa6'
+    ctx.fill()
+    ctx.beginPath()
+    ctx.ellipse(fx + sway * 0.5, fy - 1.2 * u, 0.9 * u, 1.7 * u, 0.15, 0, Math.PI * 2)
+    ctx.fillStyle = 'rgba(255, 251, 232, 0.95)'
+    ctx.fill()
+  }
+
+  // ---- the fox, from behind, walking away alongside
+  const drawFoxBehind = (gx, gy, u) => {
+    // Model space: origin between the hind paws on the ground, +x right, +y down. Seen from
+    // behind: a back tapering up to the shoulders, two sharp ears, the muzzle just showing past
+    // the right cheek, and the brush hanging down with a slow sway.
+    const mx = (v) => gx + v * u
+    const my = (v) => gy + v * u
+
+    ctx.save()
+    ctx.fillStyle = SILH
+    ctx.strokeStyle = SILH
+    ctx.lineJoin = 'round'
+    ctx.lineCap = 'round'
+
+    // tail first, so the body covers its root
+    const tl = []
+    const tr = []
+    const N = 12
+    for (let i = 0; i <= N; i++) {
+      const t = i / N
+      const cx = 0.6 + t * 3.4 + Math.sin(t * 3.6 - time * 1.5) * 1.2 * t
+      const cy = -8 + t * 22
+      const half = 4.6 * Math.cos(((t - 0.28) / 0.72) * Math.PI * 0.5) + 0.3
+      const j = i % 2 === 0 ? 1.05 : 0.95
+      tl.push([mx(cx - half * j), my(cy)])
+      tr.push([mx(cx + half * j), my(cy)])
+    }
+    ctx.beginPath()
+    tl.forEach((p, i) => (i ? ctx.lineTo(p[0], p[1]) : ctx.moveTo(p[0], p[1])))
+    for (let i = tr.length - 1; i >= 0; i--) ctx.lineTo(tr[i][0], tr[i][1])
+    ctx.closePath()
+    ctx.fill()
+
+    // hind legs and paws
+    ctx.lineWidth = 3.4 * u
+    ctx.beginPath()
+    ctx.moveTo(mx(-4.6), my(-12))
+    ctx.quadraticCurveTo(mx(-5.4), my(-6), mx(-4.8), my(-0.9))
+    ctx.stroke()
+    ctx.lineWidth = 3.2 * u
+    ctx.beginPath()
+    ctx.moveTo(mx(4.4), my(-12))
+    ctx.quadraticCurveTo(mx(5), my(-6), mx(4.6), my(-0.9))
+    ctx.stroke()
+
+    // body, tapering up to the shoulders
+    ctx.beginPath()
+    ctx.moveTo(mx(-8.4), my(-11.4))
+    ctx.bezierCurveTo(mx(-9.6), my(-19), mx(-8.6), my(-25), mx(-5.4), my(-28.6))
+    ctx.quadraticCurveTo(mx(-1.4), my(-31), mx(2.6), my(-29.4))
+    ctx.bezierCurveTo(mx(7), my(-27), mx(8.8), my(-20), mx(7.8), my(-12.4))
+    ctx.quadraticCurveTo(mx(0), my(-9.4), mx(-8.4), my(-11.4))
+    ctx.closePath()
+    ctx.fill()
+
+    // head, muzzle just past the right cheek, and two sharp ears
+    ctx.beginPath()
+    ctx.ellipse(mx(-0.4), my(-33), 5.2 * u, 4.7 * u, 0, 0, Math.PI * 2)
+    ctx.fill()
+    ctx.beginPath()
+    ctx.moveTo(mx(2.4), my(-34.4))
+    ctx.quadraticCurveTo(mx(7.4), my(-32.6), mx(9.4), my(-30.4))
+    ctx.quadraticCurveTo(mx(9.6), my(-29.2), mx(8.2), my(-29))
+    ctx.quadraticCurveTo(mx(5), my(-28.8), mx(2.2), my(-29.6))
+    ctx.closePath()
+    ctx.fill()
+    ctx.beginPath()
+    ctx.moveTo(mx(-5.4), my(-35))
+    ctx.lineTo(mx(-6.8), my(-43.4))
+    ctx.lineTo(mx(-1.6), my(-37))
+    ctx.closePath()
+    ctx.fill()
+    ctx.beginPath()
+    ctx.moveTo(mx(1.4), my(-37))
+    ctx.lineTo(mx(5.4), my(-43.6))
+    ctx.lineTo(mx(5.8), my(-35.6))
+    ctx.closePath()
+    ctx.fill()
+
+    ctx.restore()
+  }
+
+  // Places the pair in the open band right of the centred login card: small, far away, seen from
+  // behind, the figure carrying a torch. Sized from the window height so they stay distant, with
+  // a band guard so a narrow window cannot push them under the card. The torch is painted after
+  // both bodies, so its warm light falls across their shoulders.
+  const drawCompanions = () => {
+    // The login card is 400px wide and centred, so the open band begins at half its width plus
+    // a gap. Sizing from that (rather than a fraction of the viewport) is what keeps the pair
+    // out from behind the card on wide windows while still shrinking on narrow ones.
+    const CARD_HALF = 208
+    const bandLeft = width / 2 + CARD_HALF
+    const band = Math.max(120, width - 24 - bandLeft)
+    const u = Math.max(0.55, Math.min(height * 0.00195, band / 34))
+
+    const px = bandLeft + 15 * u
+    const py = hillY(px)
+    const fx = px + 21 * u
+    const fy = hillY(fx)
+
+    const flame = drawBearer(px, py, u)
+    drawFoxBehind(fx, fy, u)
+    drawTorch(flame.x, flame.y, u)
+  }
+
+
+  const drawGround = () => {
+    ctx.fillStyle = '#08140f'
+    ctx.beginPath()
+    ctx.moveTo(0, height)
+    ctx.lineTo(0, hillY(0))
+    for (let x = 0; x <= width; x += width / 60) ctx.lineTo(x, hillY(x))
+    ctx.lineTo(width, height)
+    ctx.closePath()
+    ctx.fill()
+
+    ctx.fillStyle = 'rgba(150, 220, 180, 0.10)'
+    ctx.beginPath()
+    ctx.moveTo(0, hillY(0))
+    for (let x = 0; x <= width; x += width / 60) ctx.lineTo(x, hillY(x))
+    ctx.strokeStyle = 'rgba(150, 220, 180, 0.10)'
+    ctx.lineWidth = 1
+    ctx.stroke()
+  }
+
+  // ------------------------------------------------- far settlement
+
+  // A small village of tiny lit houses out along the horizon - fifteen buildings, a fraction of
+  // the figure's height, washed with soft haze so it reads as very far away: somebody else's warm
+  // windows while the figure on the ground carries their own light alone. Painted after the ground
+  // and before the foreground grass, so the near grass blades pass in front of them.
+  //
+  // The windows come on and go out on their own. Each house owns a phase and a period drawn from
+  // a fixed pseudo-random sequence, so the lights change one at a time at irregular intervals -
+  // never all together, and the same way on every reload.
+  //
+  // LIGHT_TICK throttles every one of those changes: the whole village is only re-evaluated a few
+  // times a minute, so a window opens or closes and then holds for seconds rather than flickering.
+  const LIGHT_TICK = 2.4
+
+  const drawFarHouses = () => {
+    const rnd = (i, k) => {
+      const v = Math.sin(i * 12.9898 + k * 78.233) * 43758.5453
+      return v - Math.floor(v)
+    }
+
+    // two clusters, one either side of the login card; six to the left, nine (with the church)
+    // to the right, so the village reads around the card without crowding it
+    const bands = [[0.372, 0.615, 6], [0.652, 0.995, 9]]
+    const plan = []
+    let seed = 0
+    bands.forEach(([x0, x1, count], bandIndex) => {
+      for (let n = 0; n < count; n++) {
+        // deterministic jitter keeps the row irregular while the count stays exact
+        const x = x0 + ((n + 0.5) / count) * (x1 - x0) + (rnd(seed, 21) - 0.5) * 0.022
+        plan.push({
+          x,
+          w: (7 + rnd(seed, 2) * 11) * S,
+          h: (6 + rnd(seed, 3) * 7) * S,
+          back: rnd(seed, 1) > 0.48,
+          i: seed,
+          // the tallest building on the right becomes the church, the village's centre
+          church: bandIndex === 1 && n === 3
+        })
+        seed += 1
+      }
+    })
+
+    const bodyCol = '#0a1a13'
+    ctx.save()
+    ctx.globalAlpha = 0.87
+
+    for (const b of plan) {
+      const { i } = b
+      const x = width * b.x
+      // the back row sits a few pixels higher, which is all the perspective this needs
+      const gy = hillY(x) - (b.back ? 5.6 : 0.4)
+      const w = b.church ? 11 * S : b.w
+      const h = b.church ? 16 * S : b.h
+      const roof = h * (0.4 + rnd(i, 11) * 0.34)
+      const dir = rnd(i, 12) > 0.5 ? 1 : -1
+
+      ctx.fillStyle = bodyCol
+      if (b.church) {
+        // tower with a spire rather than a pitched roof
+        const spire = h * 0.8
+        ctx.beginPath()
+        ctx.rect(x - w / 2, gy - h, w, h)
+        ctx.fill()
+        ctx.beginPath()
+        ctx.moveTo(x - w * 0.58, gy - h)
+        ctx.lineTo(x, gy - h - spire)
+        ctx.lineTo(x + w * 0.58, gy - h)
+        ctx.closePath()
+        ctx.fill()
+      } else {
+        ctx.beginPath()
+        ctx.rect(x - w / 2, gy - h, w, h)
+        ctx.fill()
+        // pitched roof, overhanging a little and not always centred
+        const eave = 0.55 + rnd(i, 13) * 0.16
+        ctx.beginPath()
+        ctx.moveTo(x - w * eave, gy - h)
+        ctx.lineTo(x + w * (rnd(i, 14) - 0.5) * 0.2, gy - h - roof)
+        ctx.lineTo(x + w * eave, gy - h)
+        ctx.closePath()
+        ctx.fill()
+        if (rnd(i, 15) > 0.5) {
+          ctx.fillRect(x + w * 0.2, gy - h - roof * 0.7, Math.max(1, w * 0.09), roof * 0.76)
+        }
+      }
+
+      // ---- this house's window schedule. The state is only re-evaluated on a slow tick, not
+      // every frame, so a light can never chatter on and off: it holds for at least TICK seconds
+      // per update. Each house still owns its own phase and period (9-17s, ~50% duty), so they
+      // flip one at a time at irregular intervals and never together.
+      const phase = rnd(i, 31) * Math.PI * 2
+      const period = 9 + rnd(i, 32) * 8
+      const lit = Math.sin((Math.floor(time / LIGHT_TICK) * LIGHT_TICK / period) * Math.PI * 2 + phase) > 0
+      if (!lit) continue
+
+      // ---- lit windows: the only warm points at this distance
+      ctx.fillStyle = 'rgba(255, 199, 118, 0.95)'
+      const wsz = Math.max(1.4, w * 0.2)
+      const wx = x + dir * w * 0.17
+      const wy = gy - h * 0.58
+      if (b.church) {
+        ctx.fillRect(wx - wsz / 2, gy - h * 0.74, wsz, wsz * 1.5)
+        ctx.fillRect(wx - wsz / 2, gy - h * 0.34, wsz, wsz * 1.1)
+      } else {
+        ctx.fillRect(wx - wsz / 2, wy - wsz / 2, wsz, wsz)
+        if (h > 9 * S && rnd(i, 17) > 0.5) ctx.fillRect(wx - wsz / 2, wy - wsz * 1.65, wsz, wsz * 0.8)
+      }
+
+      const rad = wsz * (b.church ? 6 : 4.6)
+      const gy2 = b.church ? gy - h * 0.55 : wy
+      const glow = ctx.createRadialGradient(wx, gy2, 0, wx, gy2, rad)
+      glow.addColorStop(0, 'rgba(255, 190, 110, 0.3)')
+      glow.addColorStop(0.35, 'rgba(240, 160, 90, 0.1)')
+      glow.addColorStop(0.72, 'rgba(220, 145, 85, 0.03)')
+      glow.addColorStop(1, 'rgba(220, 145, 85, 0)')
+      ctx.fillStyle = glow
+      ctx.beginPath()
+      ctx.arc(wx, gy2, rad, 0, Math.PI * 2)
+      ctx.fill()
+    }
+
+    ctx.restore()
+
+    // a soft radial wash over the settlement, so it sits behind the night rather than on it.
+    // Deliberately not a fillRect: a rectangular wash leaves visible straight seams in the sky.
+    const hx = width * 0.74
+    const hy = groundY()
+    const hrad = width * 0.38
+    const haze = ctx.createRadialGradient(hx, hy, hrad * 0.1, hx, hy, hrad)
+    haze.addColorStop(0, 'rgba(24, 58, 44, 0.32)')
+    haze.addColorStop(0.48, 'rgba(24, 58, 44, 0.15)')
+    haze.addColorStop(1, 'rgba(24, 58, 44, 0)')
+    ctx.fillStyle = haze
+    ctx.beginPath()
+    ctx.arc(hx, hy, hrad, 0, Math.PI * 2)
+    ctx.fill()
+  }
+
+  const drawGrass = () => {
+    ctx.lineCap = 'round'
+    for (const t of tufts) {
+      ctx.globalAlpha = t.alpha
+      ctx.strokeStyle = '#0a1811'
+      for (const b of t.blades) {
+        const sway = b.lean + Math.sin(time * 0.9 + b.phase + t.phase) * 0.1
+        ctx.lineWidth = 1.6 * t.s
+        ctx.beginPath()
+        ctx.moveTo(t.x + b.dx * t.s, t.y)
+        ctx.quadraticCurveTo(
+          t.x + b.dx * t.s + sway * b.len * t.s * 0.4,
+          t.y - b.len * t.s * 0.6,
+          t.x + b.dx * t.s + sway * b.len * t.s,
+          t.y - b.len * t.s
+        )
+        ctx.stroke()
+      }
+    }
+    ctx.globalAlpha = 1
+  }
 
   const drawBackground = () => {
     const grad = ctx.createLinearGradient(0, 0, 0, height)
@@ -208,159 +956,60 @@ const initCanvas = () => {
     ctx.globalAlpha = 1
   }
 
-  const drawRidge = () => {
-    // flat foreground ground — the figures stand exactly on this line
-    ctx.fillStyle = '#08140f'
-    ctx.fillRect(0, groundY(), width, height - groundY())
-    // subtle horizon glow
-    ctx.fillStyle = 'rgba(140, 215, 170, 0.08)'
-    ctx.fillRect(0, groundY(), width, 1)
-  }
+  const drawMainTree = () => {
+    const tx = width * 0.15
+    const base = groundY() + 12
+    const h = height * 0.44
+    const baseW = h * 0.075
+    const tipX = tx + h * 0.03
 
-  const drawLanternGlow = (x, y) => {
-    const breathe = 0.8 + Math.sin(time * 1.2) * 0.2
-    const r = height * 0.055 * breathe
-    const grad = ctx.createRadialGradient(x, y, 0, x, y, r * 4)
-    grad.addColorStop(0, `rgba(240, 200, 130, ${0.4 * breathe})`)
-    grad.addColorStop(0.4, 'rgba(240, 200, 130, 0.12)')
-    grad.addColorStop(1, 'rgba(240, 200, 130, 0)')
-    ctx.fillStyle = grad
-    ctx.beginPath()
-    ctx.arc(x, y, r * 4, 0, Math.PI * 2)
-    ctx.fill()
-  }
+    // limbs off the trunk, drooping out and down; the short bare twigs break the cone outline
+    const limbs = [
+      [-1, 0.16, 0.24, 0.13],
+      [1, 0.26, 0.26, 0.15],
+      [-1, 0.48, 0.2, 0.11],
+      [1, 0.66, 0.16, 0.1]
+    ]
+    for (const [dir, hy, len, w] of limbs) {
+      const startY = base - h * (0.26 + hy * 0.66)
+      const bx = tx + dir * baseW * 0.3
+      const ex = bx + dir * h * len
+      const ey = startY + h * 0.1
+      ctx.strokeStyle = SILH
+      ctx.lineCap = 'round'
+      ctx.lineWidth = Math.max(1.4, h * w * 0.5)
+      ctx.beginPath()
+      ctx.moveTo(bx, startY)
+      ctx.quadraticCurveTo((bx + ex) * 0.5, (startY + ey) * 0.5 - h * 0.025, ex, ey)
+      ctx.stroke()
+    }
 
-  const drawWatchman = () => {
-    const g = groundY()
-    const wx = width * 0.68
-    const h = height * 0.17
-
-    ctx.save()
-    ctx.translate(wx, g)
-    ctx.fillStyle = SILH
-    // cloak
-    ctx.beginPath()
-    ctx.moveTo(-h * 0.16, 0)
-    ctx.lineTo(-h * 0.11, -h * 0.56)
-    ctx.quadraticCurveTo(0, -h * 0.63, h * 0.11, -h * 0.56)
-    ctx.lineTo(h * 0.16, 0)
-    ctx.closePath()
-    ctx.fill()
-    // head + hood
-    ctx.beginPath()
-    ctx.arc(0, -h * 0.66, h * 0.088, 0, Math.PI * 2)
-    ctx.fill()
-    // arm raised toward the lantern
+    // trunk
     ctx.strokeStyle = SILH
-    ctx.lineWidth = h * 0.035
     ctx.lineCap = 'round'
-    ctx.beginPath()
-    ctx.moveTo(h * 0.07, -h * 0.5)
-    ctx.lineTo(h * 0.3, -h * 0.78)
-    ctx.stroke()
-    // staff
-    ctx.beginPath()
-    ctx.moveTo(h * 0.3, -h * 0.78)
-    ctx.lineTo(h * 0.3, -h * 1.14)
-    ctx.stroke()
-    // lantern body
-    ctx.fillStyle = '#241a10'
-    ctx.fillRect(h * 0.26, -h * 1.24, h * 0.08, h * 0.12)
-    ctx.restore()
+    for (const [w, k] of [[0.9, 1], [0.45, 1.05]]) {
+      ctx.lineWidth = Math.max(1.6, baseW * w)
+      ctx.beginPath()
+      ctx.moveTo(tx - baseW * 0.5 * k, base)
+      ctx.bezierCurveTo(tx - baseW * 0.34, base - h * 0.32, tipX - baseW * 0.34, base - h * 0.66, tipX, base - h)
+      ctx.stroke()
+    }
 
-    drawLanternGlow(wx + h * 0.3, g - h * 1.18)
-  }
+    // canopy: the skirt flares low and the tiers tighten as they climb, so the owl's perch can
+    // leave the trunk below the skirt and still read against the sky
+    const treeTiers = [
+      [0.1, 0.3, 0.15], [0.22, 0.275, 0.13], [0.34, 0.25, 0.12], [0.46, 0.225, 0.11],
+      [0.58, 0.195, 0.1], [0.7, 0.165, 0.095], [0.81, 0.13, 0.09], [0.91, 0.09, 0.085]
+    ]
+    drawPine(tx, base, h, SILH, treeTiers)
 
-  const drawFox = () => {
-    const g = groundY()
-    const fx = width * 0.58
-    const s = height * 0.055
-    const swish = Math.sin(time * 0.7) * 0.12
-
-    ctx.fillStyle = SILH
-    // sitting body — haunch and chest both rest on the ground
-    ctx.beginPath()
-    ctx.moveTo(fx - s * 0.55, g)
-    ctx.quadraticCurveTo(fx - s * 0.72, g - s * 0.85, fx - s * 0.35, g - s * 1.1)
-    ctx.quadraticCurveTo(fx - s * 0.05, g - s * 1.25, fx + s * 0.25, g - s * 1.05)
-    ctx.lineTo(fx + s * 0.3, g)
-    ctx.closePath()
-    ctx.fill()
-    // head with pointed snout
-    ctx.beginPath()
-    ctx.moveTo(fx - s * 0.05, g - s * 1.12)
-    ctx.quadraticCurveTo(fx + s * 0.28, g - s * 1.32, fx + s * 0.72, g - s * 1.08)
-    ctx.lineTo(fx + s * 1.05, g - s * 0.92)
-    ctx.quadraticCurveTo(fx + s * 0.82, g - s * 0.8, fx + s * 0.48, g - s * 0.86)
-    ctx.quadraticCurveTo(fx + s * 0.22, g - s * 0.92, fx - s * 0.05, g - s * 1.06)
-    ctx.closePath()
-    ctx.fill()
-    // two large ears
-    ctx.beginPath()
-    ctx.moveTo(fx + s * 0.08, g - s * 1.22)
-    ctx.lineTo(fx + s * 0.22, g - s * 1.72)
-    ctx.lineTo(fx + s * 0.4, g - s * 1.2)
-    ctx.closePath()
-    ctx.fill()
-    ctx.beginPath()
-    ctx.moveTo(fx + s * 0.36, g - s * 1.2)
-    ctx.lineTo(fx + s * 0.52, g - s * 1.68)
-    ctx.lineTo(fx + s * 0.66, g - s * 1.18)
-    ctx.closePath()
-    ctx.fill()
-    // bushy tail curling up behind
-    ctx.beginPath()
-    ctx.moveTo(fx - s * 0.5, g - s * 0.35)
-    ctx.quadraticCurveTo(fx - s * 1.15, g - s * 0.5 + swish * s, fx - s * 1.18, g - s * 1.1)
-    ctx.quadraticCurveTo(fx - s * 1.02, g - s * 1.5, fx - s * 0.62, g - s * 1.2)
-    ctx.quadraticCurveTo(fx - s * 0.45, g - s * 1.0, fx - s * 0.5, g - s * 0.5)
-    ctx.closePath()
-    ctx.fill()
-  }
-
-  const drawOwl = () => {
-    const ox = width * 0.16
-    const oy = height * 0.26
-    const s = height * 0.05
-    const blink = Math.abs(Math.sin(time * 0.35)) > 0.04 ? 1 : 0.12
-
-    ctx.strokeStyle = SILH
-    ctx.lineWidth = s * 0.16
-    ctx.lineCap = 'round'
-    ctx.beginPath()
-    ctx.moveTo(ox - s * 1.9, oy + s * 0.25)
-    ctx.lineTo(ox + s * 1.9, oy - s * 0.12)
-    ctx.stroke()
-    // body
-    ctx.fillStyle = SILH
-    ctx.beginPath()
-    ctx.ellipse(ox, oy - s * 0.5, s * 0.55, s * 0.7, 0, 0, Math.PI * 2)
-    ctx.fill()
-    // head
-    ctx.beginPath()
-    ctx.arc(ox, oy - s * 1.28, s * 0.5, 0, Math.PI * 2)
-    ctx.fill()
-    // ear tufts
-    ctx.beginPath()
-    ctx.moveTo(ox - s * 0.42, oy - s * 1.7)
-    ctx.lineTo(ox - s * 0.24, oy - s * 1.95)
-    ctx.lineTo(ox - s * 0.1, oy - s * 1.72)
-    ctx.closePath()
-    ctx.fill()
-    ctx.beginPath()
-    ctx.moveTo(ox + s * 0.1, oy - s * 1.72)
-    ctx.lineTo(ox + s * 0.24, oy - s * 1.95)
-    ctx.lineTo(ox + s * 0.42, oy - s * 1.7)
-    ctx.closePath()
-    ctx.fill()
-    // blinking eyes
-    ctx.fillStyle = '#c9e6a0'
-    ctx.beginPath()
-    ctx.ellipse(ox - s * 0.2, oy - s * 1.32, s * 0.12, s * 0.12 * blink, 0, 0, Math.PI * 2)
-    ctx.fill()
-    ctx.beginPath()
-    ctx.ellipse(ox + s * 0.2, oy - s * 1.32, s * 0.12, s * 0.12 * blink, 0, 0, Math.PI * 2)
-    ctx.fill()
+    // the perch the owl grips — a limb that clears the skirt on the right
+    const bx = tx + baseW * 0.3
+    const by = base - h * 0.34
+    const ex = bx + h * 0.3
+    const ey = by + h * 0.07
+    drawPerch(bx, by, ex, ey, Math.max(2.5, h * 0.02))
+    return { x: ex - h * 0.05, y: ey - h * 0.002, tilt: Math.atan2(ey - by, ex - bx) - 0.04 }
   }
 
   const drawFireflies = () => {
@@ -412,6 +1061,7 @@ const initCanvas = () => {
   const resize = () => {
     width = cv.width = window.innerWidth
     height = cv.height = window.innerHeight
+    S = Math.min(1.7, Math.max(0.68, height / 900))
     seed()
   }
   window.addEventListener('resize', resize)
@@ -422,12 +1072,16 @@ const initCanvas = () => {
     drawBackground()
     drawMist()
     drawStars()
-    drawRidge()
-    drawOwl()
-    drawWatchman()
-    drawFox()
+    const moon = drawMoon()
+    drawDistantHills(moon)
     drawFireflies()
     drawShooters()
+    drawGround()
+    drawFarHouses()
+    const perch = drawMainTree()
+    drawOwl(perch.x, perch.y, 1.3 * S, perch.tilt)
+    drawCompanions()
+    drawGrass()
     if (!reduceMotion) {
       time += 0.016
       rafId = requestAnimationFrame(draw)
