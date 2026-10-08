@@ -1,0 +1,51 @@
+spring:
+  application:
+    name: alertworker-datamanager
+  config:
+    import:
+      - nacos:shared-config.yaml
+  cloud:
+    nacos:
+      config:
+        server-addr: ${NACOS_SERVER_ADDR:172.168.1.249:28848}
+        # #AI-CODE-CLASS-dev_release/v0.0.1-20260804: add nacos auth username/password
+        username: ${NACOS_USERNAME:nacos}
+        password: ${NACOS_PASSWORD:123.com}
+        namespace: ${NACOS_NAMESPACE:business_test}
+        group: DEFAULT_GROUP
+        file-extension: yaml
+  # #AI-CODE-CLASS-dev_release/v0.0.1-20260804: datasource moved to nacos shared-config.yaml
+  flyway:
+    enabled: true
+    locations: classpath:db/migration
+    baseline-on-migrate: true
+
+server:
+  port: 8083
+  # #AI-CODE-FUNCTION-dev_release/v0.0.1-20260908: module URL prefix so nginx/gateway can route by path
+  # 工程前缀 /pw/alertworker + 模块前缀 /dm，完整路径 /pw/alertworker/dm/api/v1/**
+  servlet:
+    context-path: /pw/alertworker/dm
+
+# datamanager admin API auth: all /api/v1/** require X-Admin-Token header (or ?token= for SSE).
+# Override via env DATAMANAGER_ADMIN_TOKEN; leave blank to disable auth (dev only).
+alertworker:
+  datamanager:
+    admin-token: ${DATAMANAGER_ADMIN_TOKEN:alertworker-admin-2026}
+  # login (POST /api/v1/auth/login) issues signed tokens; the static admin-token above keeps working as fallback
+  auth:
+    username: ${ADMIN_USERNAME:admin}
+    password: ${ADMIN_PASSWORD:admin123}
+    secret: ${ADMIN_AUTH_SECRET:alertworker-auth-secret-2026}
+    expires-hours: ${ADMIN_AUTH_EXPIRES_HOURS:12}
+
+
+mybatis-plus:
+  configuration:
+    log-impl: org.apache.ibatis.logging.stdout.StdOutImpl
+  global-config:
+    db-config:
+      id-type: auto
+      logic-delete-field: deleted
+      logic-delete-value: 1
+      logic-not-delete-value: 0

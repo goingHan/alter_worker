@@ -1,0 +1,351 @@
+# AlertWorker Docker Compose 部署工程
+#
+# profiles 说明（按需组合启用）：
+#   db      —— 内置 PostgreSQL（用外部库时不启用）
+#   mq      —— 内置 RabbitMQ（用外部 MQ 时不启用）
+#   nacos   —— 内置 Nacos 配置中心（用外部 Nacos 时不启用）
+#   app     —— 三个后端应用 + nginx（前端静态资源 / API 反向代理）
+#
+# 内部全套启动：
+#   docker compose --profile db --profile mq --profile nacos --profile app up -d
+# 使用外部数据库 / MQ / Nacos 时（在 .env 中改 DB_HOST / RABBITMQ_HOST / NACOS_SERVER_ADDR）：
+#   docker compose --profile app up -d
+#
+# 需要 Docker Compose v2.20+（depends_on.required 语法）
+
+name: alertworker
+
+networks:
+  alertworker-net:
+    driver: bridge
+
+volumes:
+  postgres_data:
+  rabbitmq_data:
+  nacos_data:
+
+x-backend-env: &backend-env
+  NACOS_SERVER_ADDR: ${NACOS_SERVER_ADDR:-nacos:8848}
+  NACOS_NAMESPACE: ${NACOS_NAMESPACE:-business_test}
+  NACOS_USERNAME: ${NACOS_USERNAME:-nacos}
+  NACOS_PASSWORD: ${NACOS_PASSWORD:-123.com}
+  SPRING_DATASOURCE_URL: jdbc:postgresql://${DB_HOST:-postgres}:${DB_PORT:-5432}/${POSTGRES_DB:-alertworker}
+  SPRING_DATASOURCE_USERNAME: ${POSTGRES_USER:-alertworker}
+  SPRING_DATASOURCE_PASSWORD: ${POSTGRES_PASSWORD:-alertworker}
+  SPRING_RABBITMQ_HOST: ${RABBITMQ_HOST:-rabbitmq}
+  SPRING_RABBITMQ_PORT: ${RABBITMQ_PORT:-5672}
+  SPRING_RABBITMQ_USERNAME: ${RABBITMQ_USERNAME:-alertworker}
+  SPRING_RABBITMQ_PASSWORD: ${RABBITMQ_PASSWORD:-alertworker}
+  SPRING_RABBITMQ_VIRTUAL_HOST: ${RABBITMQ_VHOST:-/}
+
+services:
+
+  # ---------- 内置 PostgreSQL ----------
+  postgres:
+    image: postgres:15-alpine
+    container_name: alertworker-postgres
+    profiles: ["db"]
+    environment:
+      POSTGRES_DB: ${POSTGRES_DB:-alertworker}
+      POSTGRES_USER: ${POSTGRES_USER:-alertworker}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-alertworker}
+      TZ: ${TZ:-Asia/Shanghai}
+    ports:
+      - "${POSTGRES_PORT:-5432}:5432"
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    networks: [alertworker-net]
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER:-alertworker} -d ${POSTGRES_DB:-alertworker}"]
+      interval: 10s
+      timeout: 5s
+      retries: 10
+    restart: unless-stopped
+
+  # ---------- 内置 RabbitMQ ----------
+  rabbitmq:
+    image: rabbitmq:3.12-management-alpine
+    container_name: alertworker-rabbitmq
+    profiles: ["mq"]
+    environment:
+      RABBITMQ_DEFAULT_USER: ${RABBITMQ_USERNAME:-alertworker}
+      RABBITMQ_DEFAULT_PASS: ${RABBITMQ_PASSWORD:-alertworker}
+      RABBITMQ_DEFAULT_VHOST: ${RABBITMQ_VHOST:-/}
+      TZ: ${TZ:-Asia/Shanghai}
+    ports:
+      - "${RABBITMQ_AMQP_PORT:-5672}:5672"
+      - "${RABBITMQ_MGMT_PORT:-15672}:15672"
+    volumes:
+      - rabbitmq_data:/var/lib/rabbitmq
+    networks: [alertworker-net]
+    healthcheck:
+      test: ["CMD", "rabbitmq-diagnostics", "-q", "ping"]
+      interval: 10s
+      timeout: 5s
+      retries: 10
+    restart: unless-stopped
+
+  # ---------- 内置 Nacos 配置中心 ----------
+  nacos:
+    image: nacos/nacos-server:v2.3.0
+    container_name: alertworker-nacos
+    profiles: ["nacos"]
+    environment:
+      MODE: standalone
+      NACOS_AUTH_ENABLE: ${NACOS_AUTH_ENABLE:-false}
+      TZ: ${TZ:-Asia/Shanghai}
+    ports:
+      - "${NACOS_PORT:-8848}:8848"
+      - "${NACOS_GRPC_PORT:-9848}:9848"
+    volumes:
+      - nacos_data:/home/nacos/data
+    networks: [alertworker-net]
+    healthcheck:
+      test: ["CMD-SHELL", "curl -fs http://localhost:8848/nacos/v1/console/health/readiness || exit 1"]
+      interval: 15s
+      timeout: 5s
+      retries: 20
+      start_period: 20s
+    restart: unless-stopped
+
+  # 一次性容器：等待 Nacos 就绪后发布 shared-config.yaml（幂等，可重复执行）
+  # 内置/外部 Nacos 均会执行；外部模式地址取 NACOS_SERVER_ADDR。设 NACOS_INIT_SKIP=true 可跳过。
+  nacos-init:
+    image: curlimages/curl:8.8.0
+    container_name: alertworker-nacos-init
+    profiles: ["nacos", "app"]
+    depends_on:
+      nacos:
+        condition: service_healthy
+        required: false
+    environment:
+      NACOS_INIT_SKIP: ${NACOS_INIT_SKIP:-false}
+      NACOS_ADDR: http://${NACOS_SERVER_ADDR:-nacos:8848}
+      NACOS_NAMESPACE: ${NACOS_NAMESPACE:-business_test}
+      NACOS_USERNAME: ${NACOS_USERNAME:-nacos}
+      NACOS_PASSWORD: ${NACOS_PASSWORD:-123.com}
+      # 发布进 shared-config.yaml 的业务配置
+      DB_HOST: ${DB_HOST:-postgres}
+      DB_PORT: ${DB_PORT:-5432}
+      POSTGRES_DB: ${POSTGRES_DB:-alertworker}
+      POSTGRES_USER: ${POSTGRES_USER:-alertworker}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-alertworker}
+      RABBITMQ_HOST: ${RABBITMQ_HOST:-rabbitmq}
+      RABBITMQ_PORT: ${RABBITMQ_PORT:-5672}
+      RABBITMQ_USERNAME: ${RABBITMQ_USERNAME:-alertworker}
+      RABBITMQ_PASSWORD: ${RABBITMQ_PASSWORD:-alertworker}
+      RABBITMQ_VHOST: ${RABBITMQ_VHOST:-/}
+      MAIL_HOST: ${MAIL_HOST:-smtp.example.com}
+      MAIL_PORT: ${MAIL_PORT:-587}
+      MAIL_USERNAME: ${MAIL_USERNAME:-alerts@example.com}
+      MAIL_PASSWORD: ${MAIL_PASSWORD:-your-email-password}
+    volumes:
+      - ./conf/nacos:/work:ro
+    entrypoint:
+      - /bin/sh
+      - -c
+      - |
+        set -e
+        if [ "$${NACOS_INIT_SKIP}" = "true" ]; then
+          echo "[nacos-init] NACOS_INIT_SKIP=true, skip publishing."
+          exit 0
+        fi
+        echo "[nacos-init] waiting for nacos ..."
+        i=0
+        until curl -fs "$${NACOS_ADDR}/nacos/v1/console/health/readiness" >/dev/null 2>&1; do
+          i=$$((i+1)); [ $$i -gt 60 ] && echo "[nacos-init] nacos not ready, abort" && exit 1
+          sleep 3
+        done
+        TOKEN=""
+        if [ -n "$${NACOS_USERNAME}" ] && [ -n "$${NACOS_PASSWORD}" ]; then
+          echo "[nacos-init] login to nacos ..."
+          TOKEN=$(curl -fs -X POST "$${NACOS_ADDR}/nacos/v1/auth/login" \
+            -d "username=$${NACOS_USERNAME}&password=$${NACOS_PASSWORD}" \
+            | sed -n 's/.*"accessToken":"\([^"]*\)".*/\1/p' || true)
+        fi
+        echo "[nacos-init] rendering shared-config.yaml from template ..."
+        sed -e "s|@DB_HOST@|$${DB_HOST}|g" \
+            -e "s|@DB_PORT@|$${DB_PORT}|g" \
+            -e "s|@POSTGRES_DB@|$${POSTGRES_DB}|g" \
+            -e "s|@POSTGRES_USER@|$${POSTGRES_USER}|g" \
+            -e "s|@POSTGRES_PASSWORD@|$${POSTGRES_PASSWORD}|g" \
+            -e "s|@RABBITMQ_HOST@|$${RABBITMQ_HOST}|g" \
+            -e "s|@RABBITMQ_PORT@|$${RABBITMQ_PORT}|g" \
+            -e "s|@RABBITMQ_USERNAME@|$${RABBITMQ_USERNAME}|g" \
+            -e "s|@RABBITMQ_PASSWORD@|$${RABBITMQ_PASSWORD}|g" \
+            -e "s|@RABBITMQ_VHOST@|$${RABBITMQ_VHOST}|g" \
+            -e "s|@MAIL_HOST@|$${MAIL_HOST}|g" \
+            -e "s|@MAIL_PORT@|$${MAIL_PORT}|g" \
+            -e "s|@MAIL_USERNAME@|$${MAIL_USERNAME}|g" \
+            -e "s|@MAIL_PASSWORD@|$${MAIL_PASSWORD}|g" \
+            /work/shared-config.yaml.template > /tmp/shared-config.yaml
+        echo "[nacos-init] publishing shared-config.yaml ..."
+        curl -fs -X POST "$${NACOS_ADDR}/nacos/v1/cs/configs" \
+          --data-urlencode "dataId=shared-config.yaml" \
+          --data-urlencode "group=DEFAULT_GROUP" \
+          --data-urlencode "tenant=$${NACOS_NAMESPACE}" \
+          --data-urlencode "type=yaml" \
+          $${TOKEN:+--data-urlencode "accessToken=$${TOKEN}"} \
+          --data-urlencode "content@/tmp/shared-config.yaml" \
+          && echo "[nacos-init] shared-config published."
+    networks: [alertworker-net]
+    restart: "no"
+
+  # ---------- 后端应用 ----------
+  datamanager:
+    build:
+      context: ../../..
+      dockerfile: docs/deploy/compose-start/docker/backend.Dockerfile
+      args:
+        MODULE: alertworker-datamanager
+        PORT: "8083"
+    image: alertworker-datamanager:latest
+    container_name: alertworker-datamanager
+    profiles: ["app"]
+    environment:
+      <<: *backend-env
+      SERVER_PORT: "8083"
+      NODE_HOST: datamanager
+      SPRING_FLYWAY_ENABLED: "true"
+      DATAMANAGER_ADMIN_TOKEN: ${DM_ADMIN_TOKEN:-alertworker-admin-2026}
+      ADMIN_USERNAME: ${DM_ADMIN_USERNAME:-admin}
+      ADMIN_PASSWORD: ${DM_ADMIN_PASSWORD:-admin123}
+      ADMIN_AUTH_SECRET: ${DM_AUTH_SECRET:-alertworker-auth-secret-2026}
+    ports:
+      - "${DM_PORT:-8083}:8083"
+    networks: [alertworker-net]
+    depends_on:
+      postgres:
+        condition: service_healthy
+        required: false
+      rabbitmq:
+        condition: service_healthy
+        required: false
+      nacos:
+        condition: service_healthy
+        required: false
+    healthcheck:
+      test: ["CMD-SHELL", "nc -z 127.0.0.1 8083 || exit 1"]
+      interval: 20s
+      timeout: 5s
+      retries: 10
+      start_period: 60s
+    restart: unless-stopped
+
+  gateway:
+    build:
+      context: ../../..
+      dockerfile: docs/deploy/compose-start/docker/backend.Dockerfile
+      args:
+        MODULE: alertworker-gateway
+        PORT: "8081"
+    image: alertworker-gateway:latest
+    container_name: alertworker-gateway
+    profiles: ["app"]
+    environment:
+      <<: *backend-env
+      SERVER_PORT: "8081"
+      NODE_HOST: gateway
+      SPRING_FLYWAY_ENABLED: "false"
+    ports:
+      - "${GW_PORT:-8081}:8081"
+    networks: [alertworker-net]
+    depends_on:
+      postgres:
+        condition: service_healthy
+        required: false
+      rabbitmq:
+        condition: service_healthy
+        required: false
+      nacos:
+        condition: service_healthy
+        required: false
+      datamanager:
+        condition: service_started
+        required: false
+    restart: unless-stopped
+
+  worker:
+    build:
+      context: ../../..
+      dockerfile: docs/deploy/compose-start/docker/backend.Dockerfile
+      args:
+        MODULE: alertworker-worker
+        PORT: "8082"
+    image: alertworker-worker:latest
+    container_name: alertworker-worker
+    profiles: ["app"]
+    environment:
+      <<: *backend-env
+      SERVER_PORT: "8082"
+      NODE_HOST: worker
+      SPRING_FLYWAY_ENABLED: "false"
+    ports:
+      - "${WORKER_PORT:-8082}:8082"
+    networks: [alertworker-net]
+    depends_on:
+      postgres:
+        condition: service_healthy
+        required: false
+      rabbitmq:
+        condition: service_healthy
+        required: false
+      nacos:
+        condition: service_healthy
+        required: false
+    restart: unless-stopped
+
+  # 一次性容器：等 schema（Flyway）就绪后注入幂等种子数据
+  db-seed:
+    image: postgres:15-alpine
+    container_name: alertworker-db-seed
+    profiles: ["app"]
+    depends_on:
+      datamanager:
+        condition: service_started
+        required: false
+    environment:
+      PGHOST: ${DB_HOST:-postgres}
+      PGPORT: ${DB_PORT:-5432}
+      PGDATABASE: ${POSTGRES_DB:-alertworker}
+      PGUSER: ${POSTGRES_USER:-alertworker}
+      PGPASSWORD: ${POSTGRES_PASSWORD:-alertworker}
+      SEED_API_KEY: ${SEED_API_KEY:-alertworker-test-key}
+    entrypoint:
+      - /bin/sh
+      - -c
+      - |
+        set -e
+        echo "[db-seed] waiting for schema (flyway migrations) ..."
+        i=0
+        until psql -tAc "SELECT 1 FROM information_schema.tables WHERE table_name='message_template'" | grep -q 1; do
+          i=$$((i+1)); [ $$i -gt 60 ] && echo "[db-seed] schema not ready, abort" && exit 1
+          sleep 5
+        done
+        echo "[db-seed] seeding data ..."
+        psql -v ON_ERROR_STOP=1 -f /init/db-seed.sql -v seed_api_key="$${SEED_API_KEY}"
+        echo "[db-seed] done."
+    volumes:
+      - ./init:/init:ro
+    networks: [alertworker-net]
+    restart: "no"
+
+  # ---------- nginx：前端静态资源 + API 反向代理 ----------
+  nginx:
+    build:
+      context: ../../..
+      dockerfile: docs/deploy/compose-start/docker/frontend.Dockerfile
+    image: alertworker-frontend:latest
+    container_name: alertworker-nginx
+    profiles: ["app"]
+    ports:
+      - "${NGINX_PORT:-80}:80"
+    networks: [alertworker-net]
+    depends_on:
+      datamanager:
+        condition: service_started
+        required: false
+      gateway:
+        condition: service_started
+        required: false
+    restart: unless-stopped

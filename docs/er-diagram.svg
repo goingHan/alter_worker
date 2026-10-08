@@ -1,0 +1,164 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1200 900" width="1200" height="900">
+  <style>
+    text { font-family: "Helvetica Neue", Helvetica, Arial, "PingFang SC", "Microsoft YaHei", sans-serif; }
+    .entity-name { font-size: 13px; font-weight: 600; }
+    .attr { font-size: 11px; }
+    .pk { text-decoration: underline; }
+    .fk { font-style: italic; }
+  </style>
+  <rect width="1200" height="900" fill="#ffffff"/>
+  <text x="600" y="30" text-anchor="middle" font-size="18" font-weight="600" fill="#111827">AlertWorker Entity-Relationship Diagram</text>
+
+  <!-- api_key -->
+  <rect x="60" y="60" width="170" height="110" fill="#ffffff" stroke="#374151" stroke-width="1.5"/>
+  <line x1="60" y1="88" x2="230" y2="88" stroke="#374151" stroke-width="1"/>
+  <text x="145" y="80" text-anchor="middle" class="entity-name" fill="#111827">api_key</text>
+  <text x="68" y="104" class="attr pk" fill="#111827">id: BIGINT</text>
+  <text x="68" y="122" class="attr" fill="#374151">name: VARCHAR</text>
+  <text x="68" y="140" class="attr" fill="#374151">value: VARCHAR</text>
+  <text x="68" y="158" class="attr" fill="#374151">rate_limit: INT</text>
+
+  <!-- message_channel -->
+  <rect x="340" y="60" width="170" height="110" fill="#ffffff" stroke="#374151" stroke-width="1.5"/>
+  <line x1="340" y1="88" x2="510" y2="88" stroke="#374151" stroke-width="1"/>
+  <text x="425" y="80" text-anchor="middle" class="entity-name" fill="#111827">message_channel</text>
+  <text x="348" y="104" class="attr pk" fill="#111827">id: BIGINT</text>
+  <text x="348" y="122" class="attr" fill="#374151">name: VARCHAR</text>
+  <text x="348" y="140" class="attr" fill="#374151">channel_type: VARCHAR</text>
+  <text x="348" y="158" class="attr" fill="#374151">config_json: TEXT</text>
+
+  <!-- dictionary -->
+  <rect x="620" y="60" width="170" height="110" fill="#ffffff" stroke="#374151" stroke-width="1.5"/>
+  <line x1="620" y1="88" x2="790" y2="88" stroke="#374151" stroke-width="1"/>
+  <text x="705" y="80" text-anchor="middle" class="entity-name" fill="#111827">dictionary</text>
+  <text x="628" y="104" class="attr pk" fill="#111827">id: BIGINT</text>
+  <text x="628" y="122" class="attr" fill="#374151">dict_type: VARCHAR</text>
+  <text x="628" y="140" class="attr" fill="#374151">dict_key: VARCHAR</text>
+  <text x="628" y="158" class="attr" fill="#374151">dict_value: VARCHAR</text>
+
+  <!-- assignee -->
+  <rect x="60" y="240" width="170" height="110" fill="#ffffff" stroke="#374151" stroke-width="1.5"/>
+  <line x1="60" y1="268" x2="230" y2="268" stroke="#374151" stroke-width="1"/>
+  <text x="145" y="260" text-anchor="middle" class="entity-name" fill="#111827">assignee</text>
+  <text x="68" y="284" class="attr pk" fill="#111827">id: BIGINT</text>
+  <text x="68" y="302" class="attr" fill="#374151">phone: VARCHAR</text>
+  <text x="68" y="320" class="attr" fill="#374151">dingding_username: VARCHAR</text>
+  <text x="68" y="338" class="attr" fill="#374151">cn_name: VARCHAR</text>
+
+  <!-- communication_group -->
+  <rect x="340" y="240" width="170" height="92" fill="#ffffff" stroke="#374151" stroke-width="1.5"/>
+  <line x1="340" y1="268" x2="510" y2="268" stroke="#374151" stroke-width="1"/>
+  <text x="425" y="260" text-anchor="middle" class="entity-name" fill="#111827">communication_group</text>
+  <text x="348" y="284" class="attr pk" fill="#111827">id: BIGINT</text>
+  <text x="348" y="302" class="attr" fill="#374151">name: VARCHAR</text>
+  <text x="348" y="320" class="attr" fill="#374151">send_type: VARCHAR</text>
+
+  <!-- message_template -->
+  <rect x="620" y="240" width="170" height="128" fill="#ffffff" stroke="#374151" stroke-width="1.5"/>
+  <line x1="620" y1="268" x2="790" y2="268" stroke="#374151" stroke-width="1"/>
+  <text x="705" y="260" text-anchor="middle" class="entity-name" fill="#111827">message_template</text>
+  <text x="628" y="284" class="attr pk" fill="#111827">id: BIGINT</text>
+  <text x="628" y="302" class="attr" fill="#374151">name: VARCHAR</text>
+  <text x="628" y="320" class="attr" fill="#374151">channel_type: VARCHAR</text>
+  <text x="628" y="338" class="attr" fill="#374151">content: TEXT</text>
+  <text x="628" y="356" class="attr" fill="#374151">is_default: BOOLEAN</text>
+
+  <!-- alert_rule -->
+  <rect x="340" y="440" width="170" height="146" fill="#ffffff" stroke="#374151" stroke-width="1.5"/>
+  <line x1="340" y1="468" x2="510" y2="468" stroke="#374151" stroke-width="1"/>
+  <text x="425" y="460" text-anchor="middle" class="entity-name" fill="#111827">alert_rule</text>
+  <text x="348" y="484" class="attr pk" fill="#111827">id: BIGINT</text>
+  <text x="348" y="502" class="attr" fill="#374151">name: VARCHAR</text>
+  <text x="348" y="520" class="attr" fill="#374151">alert_type: VARCHAR</text>
+  <text x="348" y="538" class="attr" fill="#374151">match_key: VARCHAR</text>
+  <text x="348" y="556" class="attr" fill="#374151">retry_max: INT</text>
+  <text x="348" y="574" class="attr" fill="#374151">retry_backoff: VARCHAR</text>
+
+  <!-- alert_message -->
+  <rect x="620" y="440" width="170" height="146" fill="#ffffff" stroke="#374151" stroke-width="1.5"/>
+  <line x1="620" y1="468" x2="790" y2="468" stroke="#374151" stroke-width="1"/>
+  <text x="705" y="460" text-anchor="middle" class="entity-name" fill="#111827">alert_message</text>
+  <text x="628" y="484" class="attr pk" fill="#111827">id: BIGINT</text>
+  <text x="628" y="502" class="attr fk" fill="#374151">api_key_id: BIGINT</text>
+  <text x="628" y="520" class="attr fk" fill="#374151">alert_rule_id: BIGINT</text>
+  <text x="628" y="538" class="attr" fill="#374151">payload: TEXT</text>
+  <text x="628" y="556" class="attr" fill="#374151">status: VARCHAR</text>
+  <text x="628" y="574" class="attr" fill="#374151">sub_status: VARCHAR</text>
+
+  <!-- audit_log -->
+  <rect x="900" y="440" width="170" height="128" fill="#ffffff" stroke="#374151" stroke-width="1.5"/>
+  <line x1="900" y1="468" x2="1070" y2="468" stroke="#374151" stroke-width="1"/>
+  <text x="985" y="460" text-anchor="middle" class="entity-name" fill="#111827">audit_log</text>
+  <text x="908" y="484" class="attr pk" fill="#111827">id: BIGINT</text>
+  <text x="908" y="502" class="attr" fill="#374151">action: VARCHAR</text>
+  <text x="908" y="520" class="attr" fill="#374151">entity_type: VARCHAR</text>
+  <text x="908" y="538" class="attr" fill="#374151">entity_id: BIGINT</text>
+  <text x="908" y="556" class="attr" fill="#374151">operator: VARCHAR</text>
+
+  <!-- dead_letter_message -->
+  <rect x="620" y="660" width="170" height="92" fill="#ffffff" stroke="#374151" stroke-width="1.5"/>
+  <line x1="620" y1="688" x2="790" y2="688" stroke="#374151" stroke-width="1"/>
+  <text x="705" y="680" text-anchor="middle" class="entity-name" fill="#111827">dead_letter_message</text>
+  <text x="628" y="704" class="attr pk" fill="#111827">id: BIGINT</text>
+  <text x="628" y="722" class="attr fk" fill="#374151">alert_message_id: BIGINT</text>
+  <text x="628" y="740" class="attr" fill="#374151">error_info: TEXT</text>
+
+  <!-- Relationships -->
+  <!-- R1: api_key creates alert_message (1:N) -->
+  <line x1="230" y1="130" x2="340" y2="340" stroke="#4b5563" stroke-width="1.5"/>
+  <line x1="340" y1="340" x2="620" y2="520" stroke="#4b5563" stroke-width="1.5"/>
+  <polygon points="340,320 365,340 340,360 315,340" fill="#ffffff" stroke="#4b5563" stroke-width="1.5"/>
+  <text x="340" y="335" text-anchor="middle" font-size="11" fill="#374151">creates</text>
+  <text x="245" y="220" font-size="11" fill="#6b7280">1</text>
+  <text x="595" y="430" font-size="11" fill="#6b7280">N</text>
+
+  <!-- R2: alert_rule generates alert_message (1:N) -->
+  <line x1="510" y1="520" x2="620" y2="520" stroke="#4b5563" stroke-width="1.5"/>
+  <polygon points="565,500 590,520 565,540 540,520" fill="#ffffff" stroke="#4b5563" stroke-width="1.5"/>
+  <text x="565" y="515" text-anchor="middle" font-size="11" fill="#374151">generates</text>
+  <text x="525" y="510" font-size="11" fill="#6b7280">1</text>
+  <text x="605" y="510" font-size="11" fill="#6b7280">N</text>
+
+  <!-- R3: assignee member_of communication_group (M:N) -->
+  <line x1="230" y1="295" x2="295" y2="295" stroke="#4b5563" stroke-width="1.5"/>
+  <line x1="295" y1="295" x2="340" y2="295" stroke="#4b5563" stroke-width="1.5"/>
+  <polygon points="295,275 320,295 295,315 270,295" fill="#ffffff" stroke="#4b5563" stroke-width="1.5"/>
+  <text x="295" y="290" text-anchor="middle" font-size="11" fill="#374151">member_of</text>
+  <text x="250" y="285" font-size="11" fill="#6b7280">M</text>
+  <text x="325" y="285" font-size="11" fill="#6b7280">N</text>
+
+  <!-- R4: communication_group notified_by alert_rule (M:N) -->
+  <line x1="425" y1="332" x2="425" y2="386" stroke="#4b5563" stroke-width="1.5"/>
+  <line x1="425" y1="386" x2="425" y2="440" stroke="#4b5563" stroke-width="1.5"/>
+  <polygon points="425,366 450,386 425,406 400,386" fill="#ffffff" stroke="#4b5563" stroke-width="1.5"/>
+  <text x="425" y="390" text-anchor="middle" font-size="11" fill="#374151">notified_by</text>
+  <text x="430" y="360" font-size="11" fill="#6b7280">M</text>
+  <text x="430" y="430" font-size="11" fill="#6b7280">N</text>
+
+  <!-- R5: alert_rule uses message_template (M:N) -->
+  <line x1="510" y1="500" x2="565" y2="350" stroke="#4b5563" stroke-width="1.5"/>
+  <line x1="565" y1="350" x2="620" y2="320" stroke="#4b5563" stroke-width="1.5"/>
+  <polygon points="565,330 590,350 565,370 540,350" fill="#ffffff" stroke="#4b5563" stroke-width="1.5"/>
+  <text x="565" y="345" text-anchor="middle" font-size="11" fill="#374151">uses</text>
+  <text x="520" y="460" font-size="11" fill="#6b7280">M</text>
+  <text x="605" y="310" font-size="11" fill="#6b7280">N</text>
+
+  <!-- R6: alert_message becomes dead_letter_message (1:0..1) -->
+  <line x1="705" y1="586" x2="705" y2="623" stroke="#4b5563" stroke-width="1.5"/>
+  <line x1="705" y1="623" x2="705" y2="660" stroke="#4b5563" stroke-width="1.5"/>
+  <polygon points="705,603 730,623 705,643 680,623" fill="#ffffff" stroke="#4b5563" stroke-width="1.5"/>
+  <text x="705" y="627" text-anchor="middle" font-size="11" fill="#374151">becomes</text>
+  <text x="710" y="610" font-size="11" fill="#6b7280">1</text>
+  <text x="710" y="650" font-size="11" fill="#6b7280">0..1</text>
+
+  <!-- Legend -->
+  <g transform="translate(900, 720)">
+    <rect x="0" y="0" width="16" height="12" fill="#ffffff" stroke="#374151" stroke-width="1"/>
+    <text x="22" y="10" font-size="11" fill="#6b7280">Entity</text>
+    <line x1="0" y1="28" x2="30" y2="28" stroke="#4b5563" stroke-width="1.5"/>
+    <polygon points="15,18 30,28 15,38 0,28" fill="#ffffff" stroke="#4b5563" stroke-width="1.5"/>
+    <text x="36" y="32" font-size="11" fill="#6b7280">Relationship</text>
+    <text x="0" y="55" class="attr pk" font-size="11" fill="#374151">underlined = PK</text>
+    <text x="0" y="72" class="attr fk" font-size="11" fill="#374151">italic = FK</text>
+  </g>
+</svg>
