@@ -9,6 +9,7 @@ import com.alertworker.common.mapper.GroupAssigneeMapper;
 import com.alertworker.common.service.AuditLogService;
 import com.baomidou.mybatisplus.extension.plugins.pagination.Page;
 import jakarta.validation.Valid;
+import lombok.Data;
 import lombok.RequiredArgsConstructor;
 import org.springframework.web.bind.annotation.*;
 
@@ -57,6 +58,26 @@ public class AssigneeController {
         auditLogService.log("DELETE", "ASSIGNEE", id, "admin", null);
     }
 
+    // #AI-CODE-FUNCTION-dev_release/v0.0.2-20261010: dedicated enable/disable toggle. A disabled assignee stays
+    // configured (group/rule bindings untouched) but is skipped during recipient resolution — no email, no DingDing @.
+    // Kept separate from PUT /{id} so a plain edit never flips the switch by accident.
+    @PutMapping("/{id}/status")
+    public Assignee setStatus(@PathVariable Long id, @RequestBody StatusRequest request) {
+        Assignee assignee = assigneeMapper.selectById(id);
+        if (assignee == null || assignee.getDeleted() == 1) {
+            throw new IllegalArgumentException("Assignee not found: " + id);
+        }
+        boolean enabled = Boolean.TRUE.equals(request.getEnabled());
+        Assignee update = new Assignee();
+        update.setId(id);
+        update.setEnabled(enabled);
+        assigneeMapper.updateById(update);
+        assignee.setEnabled(enabled);
+        auditLogService.log(enabled ? "ASSIGNEE_ENABLE" : "ASSIGNEE_DISABLE", "ASSIGNEE", id, "admin",
+                request.getReason());
+        return assignee;
+    }
+
     // #AI-CODE-FUNCTION-dev_release/v0.0.1-20260902: assignee->group membership endpoints
     @GetMapping("/groups")
     public List<AssigneeGroupView> allGroups() {
@@ -85,5 +106,12 @@ public class AssigneeController {
         } else {
             groupAssigneeMapper.physicalDeleteByGroupAndAssignee(groupId, id);
         }
+    }
+
+    // #AI-CODE-FUNCTION-dev_release/v0.0.2-20261010: enable/disable toggle payload; reason is audit-only
+    @Data
+    public static class StatusRequest {
+        private Boolean enabled;
+        private String reason;
     }
 }

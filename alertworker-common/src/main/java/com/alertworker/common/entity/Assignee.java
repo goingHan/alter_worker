@@ -17,4 +17,8 @@ public class Assignee extends BaseEntity {
 
     @NotBlank(message = "CN name is required")
     private String cnName;
+
+    // #AI-CODE-FUNCTION-dev_release/v0.0.2-20261010: disabled assignees are skipped during recipient resolution
+    // (no email, no DingDing @); null is treated as enabled (DB default TRUE).
+    private Boolean enabled;
 }

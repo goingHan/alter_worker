@@ -16,6 +16,7 @@ COPY alertworker-common/pom.xml alertworker-common/
 COPY alertworker-datamanager/pom.xml alertworker-datamanager/
 COPY alertworker-gateway/pom.xml alertworker-gateway/
 COPY alertworker-worker/pom.xml alertworker-worker/
+COPY alertworker-processor/pom.xml alertworker-processor/
 RUN mvn -B -q dependency:go-offline || true
 
 # 再复制源码执行打包（只构建目标模块及其依赖）

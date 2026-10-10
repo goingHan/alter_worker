@@ -30,3 +30,14 @@ alertworker:
     queue: alertworker.queue
     dlq: alertworker.dlq
     dlx: alertworker.dlx
+  # 数据加工模块：HTML 日报对象存储（上传 endpoint/bucket 与公网展示地址解耦）
+  storage:
+    type: @STORAGE_TYPE@
+    public-base-url: @STORAGE_PUBLIC_BASE_URL@
+    bucket: @STORAGE_BUCKET@
+    home: @STORAGE_HOME@
+    oss:
+      endpoint: @OSS_ENDPOINT@
+      region: @OSS_REGION@
+      access-key-id: @OSS_ACCESS_KEY_ID@
+      access-key-secret: @OSS_ACCESS_KEY_SECRET@

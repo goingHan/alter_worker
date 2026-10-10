@@ -16,7 +16,7 @@ public interface RuleAssigneeMapper extends BaseMapper<RuleAssignee> {
     @Select("SELECT ra.rule_id AS ruleId, ra.assignee_id AS assigneeId, ra.channel_type AS channelType, "
             + "a.cn_name AS cnName, a.phone AS phone, a.dingding_username AS dingdingUsername, a.email AS email "
             + "FROM rule_assignee ra "
-            + "JOIN assignee a ON a.id = ra.assignee_id AND a.deleted = 0 "
+            + "JOIN assignee a ON a.id = ra.assignee_id AND a.deleted = 0 AND a.enabled = TRUE "
             + "WHERE ra.rule_id = #{ruleId}")
     List<RuleAssigneeView> selectWithAssignee(@Param("ruleId") Long ruleId);
 }

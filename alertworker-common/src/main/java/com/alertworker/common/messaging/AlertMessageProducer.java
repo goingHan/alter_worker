@@ -1,4 +1,4 @@
-package com.alertworker.gateway.rabbitmq;
+package com.alertworker.common.messaging;
 
 import com.alertworker.common.dto.AlertMessagePayload;
 import com.fasterxml.jackson.databind.ObjectMapper;
@@ -16,10 +16,10 @@ public class AlertMessageProducer {
     private final RabbitTemplate rabbitTemplate;
     private final ObjectMapper objectMapper;
 
-    @Value("${alertworker.rabbitmq.exchange}")
+    @Value("${alertworker.rabbitmq.exchange:alertworker.exchange}")
     private String exchange;
 
-    @Value("${alertworker.rabbitmq.routing-key}")
+    @Value("${alertworker.rabbitmq.routing-key:alertworker.routing.key}")
     private String routingKey;
 
     public void send(AlertMessagePayload payload) {

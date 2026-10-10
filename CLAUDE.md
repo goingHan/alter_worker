@@ -2,6 +2,14 @@
 
 This file provides guidance to Claude Code (claude.ai/code) when working with code in this repository.
 
+## Workspace Instructions
+
+Before doing any work in this repository, read these files in full from `.claude/`:
+
+- `.claude/IDENTITY.md`
+- `.claude/SOUL.md`
+
+
 ## Project Overview
 
 AlertWorker is a transfer station that accepts alert messages and transfers them to notification channels such as DingDing and Email.
@@ -29,6 +37,7 @@ AlertWorker is a transfer station that accepts alert messages and transfers them
 - `alertworker-datamanager`: Stateless configuration/CRUD API (can run independently)
 - `alertworker-gateway`: Alert ingestion, API key validation, rule matching, enqueueing
 - `alertworker-worker`: RabbitMQ consumer, generic dispatcher for all message channels
+- `alertworker-processor`: Data-processing module — owns the scheduled-job tick (periodic test messages, daily-report generation) and renders/uploads hosted HTML reports to object storage before enqueueing (context-path `/pw/alertworker/dp`)
 
 ### System Terms
 

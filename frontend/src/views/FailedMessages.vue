@@ -50,6 +50,7 @@
 import { ref, onMounted } from 'vue'
 import { Message } from 'view-ui-plus'
 import request, { gatewayRequest } from '../api/request.js'
+import { fmtTime } from '../utils/time.js'
 
 const loading = ref(false)
 const activeTab = ref('failed')
@@ -71,7 +72,8 @@ const failedColumns = [
   { title: '规则 ID', key: 'alertRuleId', width: 90 },
   { title: '子状态', key: 'subStatus', width: 120 },
   { title: '重试', key: 'retryCount', width: 70, align: 'center' },
-  { title: '时间', key: 'createdAt', minWidth: 160 },
+  { title: '时间', key: 'createdAt', minWidth: 160,
+    render: (h, p) => h('span', {}, fmtTime(p.row.createdAt)) },
   { title: '操作', slot: 'action', width: 90 }
 ]
 
@@ -79,7 +81,8 @@ const deadColumns = [
   { title: 'ID', key: 'id', width: 80 },
   { title: '关联告警 ID', key: 'alertMessageId', width: 120 },
   { title: '错误信息', key: 'errorInfo', minWidth: 260 },
-  { title: '时间', key: 'createdAt', width: 170 },
+  { title: '时间', key: 'createdAt', width: 170,
+    render: (h, p) => h('span', {}, fmtTime(p.row.createdAt)) },
   { title: '操作', slot: 'action', width: 90 }
 ]
 

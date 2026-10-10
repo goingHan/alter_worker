@@ -19,7 +19,7 @@ public interface GroupAssigneeMapper extends BaseMapper<GroupAssignee> {
             + "ga.service_types AS serviceTypes, a.cn_name AS cnName, a.phone AS phone, "
             + "a.dingding_username AS dingdingUsername, a.email AS email "
             + "FROM group_assignee ga "
-            + "JOIN assignee a ON a.id = ga.assignee_id AND a.deleted = 0 "
+            + "JOIN assignee a ON a.id = ga.assignee_id AND a.deleted = 0 AND a.enabled = TRUE "
             + "WHERE ga.deleted = 0 AND ga.group_id IN "
             + "<foreach collection='groupIds' item='gid' open='(' separator=',' close=')'>#{gid}</foreach>"
             + "</script>")

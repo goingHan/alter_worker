@@ -21,7 +21,9 @@ public class MessageChannelDispatcher {
 
     // #AI-CODE-FUNCTION-dev_release/v0.0.1-20260907: batch all recipients sharing the same channel into a single call.
     // Only messages spread across one channel (e.g. one DingDing robot) so recipients are @-ed together in a single message.
-    public boolean dispatch(List<AlertRecipient> recipients, String renderedContent) {
+    // #AI-CODE-FUNCTION-dev_release/v0.0.2-20261009: `linkUrl` carries a hosted-HTML report link (DingDing button /
+    // appended link); `htmlInline` forces the email body to be sent as HTML.
+    public boolean dispatch(List<AlertRecipient> recipients, String renderedContent, String linkUrl, boolean htmlInline) {
         if (recipients == null || recipients.isEmpty()) {
             log.warn("dispatch called with empty recipients");
             return false;
@@ -35,11 +37,11 @@ public class MessageChannelDispatcher {
         }
 
         if (channel.getChannelType() == ChannelType.DINGDING) {
-            return dingDingChannelHandler.send(channel, recipients, renderedContent);
+            return dingDingChannelHandler.send(channel, recipients, renderedContent, linkUrl);
         } else if (channel.getChannelType() == ChannelType.EMAIL) {
             boolean allSuccess = true;
             for (AlertRecipient recipient : recipients) {
-                allSuccess &= emailChannelHandler.send(channel, recipient, renderedContent);
+                allSuccess &= emailChannelHandler.send(channel, recipient, renderedContent, htmlInline);
             }
             return allSuccess;
         }

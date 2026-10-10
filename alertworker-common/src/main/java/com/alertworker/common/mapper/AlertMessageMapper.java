@@ -83,6 +83,7 @@ public interface AlertMessageMapper extends BaseMapper<AlertMessage> {
             SELECT m.id, m.message_no AS "messageNo", m.alert_rule_id AS "alertRuleId", m.status,
                    m.sub_status AS "subStatus", m.retry_count AS "retryCount",
                    m.received_at AS "receivedAt", m.created_at AS "createdAt", m.payload,
+                   m.message_type AS "messageType",
                    r.name AS "ruleName",
                    m.channel_names AS "channelNames",
                    EXISTS (SELECT 1 FROM dead_letter_message d WHERE d.alert_message_id = m.id) AS "inDeadLetter"
@@ -113,6 +114,9 @@ public interface AlertMessageMapper extends BaseMapper<AlertMessage> {
             <if test="channelName != null and channelName != ''">
               AND m.channel_names ILIKE CONCAT('%', #{channelName}, '%')
             </if>
+            <if test="messageType != null and messageType != ''">
+              AND m.message_type = #{messageType}
+            </if>
             ORDER BY m.created_at DESC
             </script>
             """)
@@ -123,5 +127,28 @@ public interface AlertMessageMapper extends BaseMapper<AlertMessage> {
                                              @Param("end") LocalDateTime end,
                                              @Param("inDeadLetter") Boolean inDeadLetter,
                                              @Param("ruleName") String ruleName,
-                                             @Param("channelName") String channelName);
+                                             @Param("channelName") String channelName,
+                                             @Param("messageType") String messageType);
+
+    /**
+     * #AI-CODE-FUNCTION-dev_release/v0.0.2-20261010: per-rule, per-hour alert counts of a window (used by the daily
+     * report's trend monitoring items). Rows are {@code {ruleId, hourOfDay, cnt}} for the requested rule ids and
+     * {@code [start, end)} window; hours without alerts are simply absent (caller fills zeros).
+     */
+    @Select("""
+            <script>
+            SELECT alert_rule_id AS "ruleId",
+                   CAST(EXTRACT(HOUR FROM created_at) AS int) AS "hourOfDay",
+                   COUNT(*) AS "cnt"
+            FROM alert_message
+            WHERE deleted = 0 AND message_type = 'ALERT' AND status &lt;&gt; 'SILENCED'
+              AND alert_rule_id IN
+              <foreach collection='ruleIds' item='rid' open='(' separator=',' close=')'>#{rid}</foreach>
+              AND created_at &gt;= #{start} AND created_at &lt; #{end}
+            GROUP BY alert_rule_id, EXTRACT(HOUR FROM created_at)
+            </script>
+            """)
+    List<Map<String, Object>> countHourlyByRule(@Param("ruleIds") List<Long> ruleIds,
+                                                @Param("start") LocalDateTime start,
+                                                @Param("end") LocalDateTime end);
 }

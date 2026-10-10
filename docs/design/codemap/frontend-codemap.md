@@ -109,7 +109,7 @@ SSE 的 token 从 localStorage 读取（`History.vue:164`），不走 axios。
 ### 4.5 其余 CRUD 页面（API Keys / Channels / Assignees / Groups / Templates / Rules / Failed）
 
 与历史版本一致，接口未变：
-- ApiKeys：`GET/POST /api-keys`、`PUT/DELETE /api-keys/{id}`
+- ApiKeys：`GET/POST /api-keys`、`PUT/DELETE /api-keys/{id}`、`GET /api-keys/{id}/reveal`（编辑弹窗回显原始密钥）
 - Channels：`GET/POST /channels`、`PUT/DELETE /channels/{id}`、`POST /channels/{id}/test`（gateway 8081）
 - Assignees：`GET/POST /assignees`、`PUT/DELETE /assignees/{id}`
 - Groups：`GET/POST /groups`、`PUT/DELETE /groups/{id}`

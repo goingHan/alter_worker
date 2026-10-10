@@ -36,6 +36,12 @@
             <version>0.12.5</version>
             <scope>runtime</scope>
         </dependency>
+        <!-- #AI-CODE-CLASS-dev_release/v0.0.1-20261008: JUnit 5 for the scheduler cron helper test -->
+        <dependency>
+            <groupId>org.springframework.boot</groupId>
+            <artifactId>spring-boot-starter-test</artifactId>
+            <scope>test</scope>
+        </dependency>
     </dependencies>
 
     <build>
@@ -51,6 +57,13 @@
                         </goals>
                     </execution>
                 </executions>
+            </plugin>
+            <!-- #AI-CODE-CLASS-dev_release/v0.0.1-20261008: the parent pom does not inherit spring-boot-starter-parent,
+                 so the default surefire 2.12.4 (no JUnit 5 support) is bound; pin 3.x here for the scheduler tests -->
+            <plugin>
+                <groupId>org.apache.maven.plugins</groupId>
+                <artifactId>maven-surefire-plugin</artifactId>
+                <version>3.2.5</version>
             </plugin>
         </plugins>
     </build>

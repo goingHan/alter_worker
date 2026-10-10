@@ -5,6 +5,7 @@ target/
 *.war
 *.ear
 *.zip
+.omo
 *.tar.gz
 *.rar
 hs_err_pid*
@@ -74,3 +75,5 @@ hs_err_pid*.log
 ### Project-specific ###
 .claude
 .understand-anything
+# local object-storage fallback (alertworker.storage.type=local)
+alertworker-storage/

@@ -172,6 +172,7 @@ import { useRouter } from 'vue-router'
 import request from '../api/request.js'
 import LineChart from '../components/LineChart.vue'
 import { prettyJson } from '../utils/json'
+import { fmtTime } from '../utils/time.js'
 
 const router = useRouter()
 const stats = ref({ total: 0, success: 0, failed: 0, deadLetters: 0, silenced: 0, unmatched: 0, silencedRules: 0 })
@@ -245,7 +246,8 @@ const columns = [
     title: '状态', key: 'status', width: 110,
     render: (h, params) => statusTag(params.row.status)
   },
-  { title: '时间', key: 'createdAt', width: 170 }
+  { title: '时间', key: 'createdAt', width: 170,
+    render: (h, params) => h('span', {}, fmtTime(params.row.createdAt)) }
 ]
 
 // #AI-CODE-FUNCTION-dev_release/v0.0.1-20260917: dropped rows have no channel and no delivery duration — the whole
@@ -258,7 +260,7 @@ const droppedColumns = [
     title: '状态', key: 'status', width: 100,
     render: (h, params) => statusTag(params.row.status)
   },
-  { title: '接收时间', key: 'createdAt', width: 165, render: (h, params) => h('span', {}, params.row.createdAt || params.row.receivedAt || '--') }
+  { title: '接收时间', key: 'createdAt', width: 165, render: (h, params) => h('span', {}, fmtTime(params.row.createdAt || params.row.receivedAt)) }
 ]
 
 // #AI-CODE-FUNCTION-dev_release/v0.0.1-20260917: an unmatched alert has no rule by definition, so the rule-name column
@@ -270,7 +272,7 @@ const unmatchedColumns = [
     title: '状态', key: 'status', width: 100,
     render: (h, params) => statusTag(params.row.status)
   },
-  { title: '接收时间', key: 'createdAt', width: 165, render: (h, params) => h('span', {}, params.row.createdAt || params.row.receivedAt || '--') }
+  { title: '接收时间', key: 'createdAt', width: 165, render: (h, params) => h('span', {}, fmtTime(params.row.createdAt || params.row.receivedAt)) }
 ]
 
 const fetchStats = async () => {

@@ -61,6 +61,14 @@
               <Icon type="ios-people-outline" />
               <span title="值班人员">值班人员</span>
             </MenuItem>
+            <MenuItem name="/test-message" to="/test-message">
+              <Icon type="ios-timer-outline" />
+              <span title="周期测试消息">周期测试消息</span>
+            </MenuItem>
+            <MenuItem name="/reports" to="/reports">
+              <Icon type="ios-paper-outline" />
+              <span title="告警日报">告警日报</span>
+            </MenuItem>
           </Submenu>
           <Submenu name="integration">
             <template #title>
@@ -168,7 +176,9 @@ const pageTitles = {
   '/api-keys': 'API 密钥',
   '/integration/prometheus': 'Prometheus 对接',
   '/integration/notification': '通知对接',
-  '/nodes': '节点管理'
+  '/nodes': '节点管理',
+  '/test-message': '周期测试消息',
+  '/reports': '告警日报'
 }
 
 const pageTitle = computed(() => pageTitles[route.path] || 'AlertWorker')

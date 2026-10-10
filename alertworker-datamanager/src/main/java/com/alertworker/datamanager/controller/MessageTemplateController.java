@@ -53,6 +53,11 @@ public class MessageTemplateController {
 
     @DeleteMapping("/{id}")
     public void delete(@PathVariable Long id) {
+        // #AI-CODE-FUNCTION-dev_release/v0.0.2-20261009: built-in templates are system-owned and may be edited but not deleted
+        MessageTemplate existing = messageTemplateMapper.selectById(id);
+        if (existing != null && Boolean.TRUE.equals(existing.getBuiltin())) {
+            throw new IllegalArgumentException("Built-in template cannot be deleted");
+        }
         alertRuleTemplateMapper.delete(
                 new LambdaQueryWrapper<AlertRuleTemplate>().eq(AlertRuleTemplate::getTemplateId, id));
         messageTemplateMapper.deleteById(id);

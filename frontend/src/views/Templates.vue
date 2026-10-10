@@ -12,7 +12,7 @@
         <template #action="{ row }">
           <Button size="small" @click="openPreview(row)">预览</Button>
           <Button size="small" @click="edit(row)">编辑</Button>
-          <Button size="small" type="error" @click="remove(row.id)">删除</Button>
+          <Button size="small" type="error" :disabled="row.builtin === true" @click="remove(row.id)">删除</Button>
         </template>
       </Table>
       <div class="pager">
@@ -24,6 +24,13 @@
       <Form :model="formData" :label-width="90">
         <FormItem label="名称">
           <Input v-model="formData.name" placeholder="模板名称" />
+        </FormItem>
+        <FormItem label="格式">
+          <Select v-model="formData.format" style="width: 220px">
+            <Option value="TEXT">文本（内联发送）</Option>
+            <Option value="HTML">HTML（生成文件并上传对象存储）</Option>
+          </Select>
+          <div class="form-tip">HTML 模板用于日报：渲染成自包含 HTML 文件上传对象存储，邮件内嵌、钉钉发链接</div>
         </FormItem>
         <FormItem label="模板内容">
           <Input v-model="formData.content" type="textarea" :rows="7" placeholder="Jinjava 模板内容，支持 {{ labels.xxx }} 等变量" />
@@ -38,7 +45,7 @@
     <Modal v-model="previewVisible" title="模板预览" width="760">
       <div class="preview-layout">
         <div class="preview-context">
-          <div class="preview-label">渲染上下文（JSON，可编辑）</div>
+          <div class="preview-label">渲染上下文（JSON，可编辑）<span class="preview-kind">{{ previewKind }}</span></div>
           <Input v-model="previewContext" type="textarea" :rows="12" class="mono-input" />
         </div>
         <div class="preview-result">
@@ -57,9 +64,10 @@
 
 <script setup>
 import { ref, reactive, computed, onMounted } from 'vue'
-import { Modal, Message } from 'view-ui-plus'
+import { Modal, Message, Tag } from 'view-ui-plus'
 import request from '../api/request.js'
 import { isHtml } from '../utils/json'
+import { fmtTime } from '../utils/time.js'
 
 const loading = ref(false)
 const data = ref([])
@@ -75,8 +83,9 @@ const previewing = ref(false)
 const previewingId = ref(null)
 const previewContext = ref('')
 const previewContent = ref('')
+const previewKind = ref('告警上下文')
 
-const formData = reactive({ name: '', content: '', isDefault: false })
+const formData = reactive({ name: '', content: '', isDefault: false, format: 'TEXT' })
 
 // #AI-CODE-FUNCTION-dev_release/v0.0.1-20260916: 默认预览上下文 = Alertmanager webhook 报文结构
 // （网关会原样透传并拍平首条告警的 labels/annotations，Worker 再注入 recipient/messageNo），
@@ -118,13 +127,107 @@ const SAMPLE_CONTEXT = {
   recipient: { cnName: '张三', phone: '13800000000', dingdingUsername: 'zhangsan', channelType: 'DINGDING' }
 }
 
+// #AI-CODE-FUNCTION-dev_release/v0.0.2-20261009: 日报模板上下文 = DailyReportJobExecutor.buildReportContext 的结构
+// （date/totalCount/byRule/bySeverity/byServiceType/alerts），供内置日报模板（TEXT/HTML）预览时填入真实字段
+const REPORT_SAMPLE_CONTEXT = {
+  date: new Date().toISOString().slice(0, 10),
+  totalCount: 3,
+  byRule: [
+    { ruleId: 1, ruleName: '核心服务告警', count: 2 },
+    { ruleId: 2, ruleName: '主机资源告警', count: 1 }
+  ],
+  bySeverity: [
+    { severity: 'warning', count: 2 },
+    { severity: 'critical', count: 1 }
+  ],
+  byServiceType: [
+    { serviceType: 'core', count: 2 },
+    { serviceType: 'db', count: 1 }
+  ],
+  trends: [
+    {
+      ruleId: 1,
+      ruleName: '核心服务告警',
+      total: 2,
+      avg: 0.08,
+      median: 0,
+      p20: 0,
+      p40: 0,
+      p60: 0,
+      p80: 0,
+      max: 1,
+      min: 0,
+      series: [0, 0, 0, 0, 0, 0, 0, 0, 1, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 1, 0]
+    },
+    {
+      ruleId: 2,
+      ruleName: '主机资源告警',
+      total: 1,
+      avg: 0.04,
+      median: 0,
+      p20: 0,
+      p40: 0,
+      p60: 0,
+      p80: 0,
+      max: 1,
+      min: 0,
+      series: [0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 1]
+    }
+  ],
+  alerts: [
+    {
+      messageNo: 'DEMO-20261009-0001',
+      ruleName: '核心服务告警',
+      severity: 'warning',
+      serviceType: 'core',
+      createdAt: new Date(Date.now() - 30 * 60 * 1000).toISOString().slice(0, 19),
+      summary: 'CPU 使用率过高'
+    },
+    {
+      messageNo: 'DEMO-20261009-0002',
+      ruleName: '核心服务告警',
+      severity: 'critical',
+      serviceType: 'core',
+      createdAt: new Date(Date.now() - 15 * 60 * 1000).toISOString().slice(0, 19),
+      summary: '接口错误率超过阈值'
+    },
+    {
+      messageNo: 'DEMO-20261009-0003',
+      ruleName: '主机资源告警',
+      severity: 'warning',
+      serviceType: 'db',
+      createdAt: new Date(Date.now() - 5 * 60 * 1000).toISOString().slice(0, 19),
+      summary: '磁盘使用率超过 85%'
+    }
+  ]
+}
+
+// 日报模板的判别：内容引用了日报聚合上下文的变量（内置/自定义日报模板均适用）
+const REPORT_CONTEXT_TOKENS = ['byRule', 'bySeverity', 'byServiceType', 'totalCount']
+const isReportTemplate = (content) => REPORT_CONTEXT_TOKENS.some((t) => (content || '').includes(t))
+
 const columns = [
-  { title: '名称', key: 'name' },
+  {
+    title: '名称',
+    key: 'name',
+    render: (h, p) => h('span', {}, [
+      p.row.name,
+      // #AI-CODE-FUNCTION-dev_release/v0.0.2-20261009: builtin templates are system-owned (editable, not deletable)
+      p.row.builtin === true
+        ? h(Tag, { props: { color: 'purple' }, style: 'margin-left: 8px' }, () => '内置')
+        : null
+    ])
+  },
+  {
+    title: '格式', key: 'format', width: 90, align: 'center',
+    render: (h, p) => h('span', {}, p.row.format === 'HTML' ? 'HTML' : '文本')
+  },
   {
     title: '默认', key: 'isDefault', width: 80, align: 'center',
     render: (h, p) => h('span', {}, p.row.isDefault ? '是' : '—')
   },
-  { title: '创建时间', key: 'createdAt', width: 170 },
+  { title: '创建时间', key: 'createdAt', width: 170,
+    render: (h, p) => h('span', {}, fmtTime(p.row.createdAt)) },
   { title: '操作', slot: 'action', width: 190 }
 ]
 
@@ -154,7 +257,9 @@ const onPageSizeChange = (size) => {
 
 const openPreview = (row) => {
   previewingId.value = row.id
-  previewContext.value = JSON.stringify(SAMPLE_CONTEXT, null, 2)
+  const isReport = isReportTemplate(row.content)
+  previewKind.value = isReport ? '日报上下文' : '告警上下文'
+  previewContext.value = JSON.stringify(isReport ? REPORT_SAMPLE_CONTEXT : SAMPLE_CONTEXT, null, 2)
   previewContent.value = ''
   previewVisible.value = true
 }
@@ -179,6 +284,11 @@ const doPreview = async () => {
 }
 
 const remove = async (id) => {
+  const row = data.value.find(x => x.id === id)
+  if (row && row.builtin === true) {
+    Message.warning({ content: '内置模板不可删除' })
+    return
+  }
   Modal.confirm({
     title: '删除确认',
     content: '确定删除该模板吗？此操作不可撤销。',
@@ -196,6 +306,7 @@ const openCreateModal = () => {
   formData.name = ''
   formData.content = ''
   formData.isDefault = false
+  formData.format = 'TEXT'
   modalVisible.value = true
 }
 
@@ -205,6 +316,7 @@ const edit = (row) => {
   formData.name = row.name
   formData.content = row.content || ''
   formData.isDefault = row.isDefault || false
+  formData.format = row.format === 'HTML' ? 'HTML' : 'TEXT'
   modalVisible.value = true
 }
 
@@ -239,6 +351,15 @@ onMounted(fetch)
 
 .preview-layout { display: flex; flex-direction: column; gap: 16px; }
 .preview-label { font-size: 13px; font-weight: 600; color: var(--aw-text); margin-bottom: 6px; }
+.preview-kind {
+  margin-left: 8px;
+  padding: 1px 8px;
+  border-radius: 10px;
+  font-size: 12px;
+  font-weight: 500;
+  background: var(--aw-panel, #eef1f6);
+  color: var(--aw-text-secondary, #515a6e);
+}
 .mono-input :deep(textarea) { font-family: Consolas, monospace; font-size: 12px; }
 .preview-render {
   background: var(--aw-bg-deep);

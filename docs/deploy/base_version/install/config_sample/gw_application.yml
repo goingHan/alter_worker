@@ -1,0 +1,32 @@
+spring:
+  application:
+    name: alertworker-gateway          # ← 原来错写成 alertworker-datamanager
+  config:
+    import:
+      - nacos:shared-config.yaml
+  cloud:
+    nacos:
+      config:
+        server-addr: ${NACOS_SERVER_ADDR:172.168.1.249:28848}
+        username: ${NACOS_USERNAME:nacos}
+        password: ${NACOS_PASSWORD:123.com}
+        namespace: ${NACOS_NAMESPACE:release}
+        group: DEFAULT_GROUP
+        file-extension: yaml
+  flyway:
+    enabled: false                     # 建议：迁移只由 datamanager 执行（或启动时用 SPRING_FLYWAY_ENABLED=false）
+
+server:
+  port: 18084
+  servlet:
+    context-path: /pw/alertworker/gw   # ← 原来错写成 /pw/alertworker/dm
+
+mybatis-plus:
+  configuration:
+    log-impl: org.apache.ibatis.logging.stdout.StdOutImpl
+  global-config:
+    db-config:
+      id-type: auto
+      logic-delete-field: deleted
+      logic-delete-value: 1
+      logic-not-delete-value: 0

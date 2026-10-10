@@ -1,10 +1,9 @@
-package com.alertworker.gateway.service;
+package com.alertworker.common.service;
 
 import com.alertworker.common.entity.AlertMessage;
 import com.alertworker.common.enums.MessageStatus;
 import com.alertworker.common.enums.MessageSubStatus;
 import com.alertworker.common.mapper.AlertMessageMapper;
-import com.alertworker.common.service.AuditLogService;
 import com.baomidou.mybatisplus.core.conditions.update.LambdaUpdateWrapper;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import lombok.RequiredArgsConstructor;
@@ -17,7 +16,7 @@ import java.util.Map;
 @Slf4j
 @Service
 @RequiredArgsConstructor
-public class GatewayAlertMessageService {
+public class AlertMessageRecordService {
 
     private final AlertMessageMapper alertMessageMapper;
     private final AuditLogService auditLogService;
@@ -75,6 +74,13 @@ public class GatewayAlertMessageService {
         updateStatus(messageId, MessageStatus.UNMATCHED, null);
         auditLogService.logEvent("GW_UNMATCHED",
                 "Message " + messageId + " dropped, matched no alert rule: " + reason);
+    }
+
+    // report-only rule: the alert is stored without enqueueing so the daily-report job can aggregate it later
+    public void transitionToReportPending(Long messageId, Long alertRuleId) {
+        updateStatus(messageId, MessageStatus.REPORT_PENDING, null);
+        auditLogService.logEvent("GW_REPORT_PENDING",
+                "Message " + messageId + " stored as report-only pending for alert rule " + alertRuleId);
     }
 
     private void updateStatus(Long messageId, MessageStatus status, MessageSubStatus subStatus) {

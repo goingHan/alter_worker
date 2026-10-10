@@ -69,6 +69,7 @@ import { ref, reactive, onMounted } from 'vue'
 import { Modal, Message } from 'view-ui-plus'
 import request, { gatewayRequest } from '../api/request.js'
 import { prettyJson } from '../utils/json'
+import { fmtTime } from '../utils/time.js'
 
 const loading = ref(false)
 const data = ref([])
@@ -96,7 +97,8 @@ const columns = [
     align: 'center',
     render: (h, p) => (p.row.isDefault ? h('Tag', { props: { color: 'green' } }, () => '默认') : h('span', {}, '—'))
   },
-  { title: '创建时间', key: 'createdAt', width: 170 },
+  { title: '创建时间', key: 'createdAt', width: 170,
+    render: (h, p) => h('span', {}, fmtTime(p.row.createdAt)) },
   { title: '操作', slot: 'action', width: 270 }
 ]
 

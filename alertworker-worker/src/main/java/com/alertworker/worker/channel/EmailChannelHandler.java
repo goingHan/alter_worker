@@ -21,12 +21,13 @@ public class EmailChannelHandler {
     private final JavaMailSender javaMailSender;
     private final ObjectMapper objectMapper;
 
-    public boolean send(MessageChannel channel, AlertRecipient recipient, String renderedContent) {
+    public boolean send(MessageChannel channel, AlertRecipient recipient, String renderedContent, boolean htmlInline) {
         try {
             Map<String, Object> config = objectMapper.readValue(channel.getConfigJson(), Map.class);
             String from = (String) config.get("from");
             String subject = config.get("subject") != null ? (String) config.get("subject") : "Alert Notification";
             String format = config.get("format") != null ? (String) config.get("format") : "plain";
+            boolean html = htmlInline || "html".equalsIgnoreCase(format);
 
             // #AI-CODE-FUNCTION-dev_release/v0.0.1-20260902: prefer assignee email, then phone, then testTo
             String toEmail = recipient.getEmail();
@@ -41,7 +42,7 @@ public class EmailChannelHandler {
                 return false;
             }
 
-            if ("html".equalsIgnoreCase(format)) {
+            if (html) {
                 MimeMessage mimeMessage = javaMailSender.createMimeMessage();
                 MimeMessageHelper helper = new MimeMessageHelper(mimeMessage, true, "UTF-8");
                 helper.setFrom(from);

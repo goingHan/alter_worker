@@ -38,6 +38,17 @@ alertworker:
     password: ${ADMIN_PASSWORD:admin123}
     secret: ${ADMIN_AUTH_SECRET:alertworker-auth-secret-2026}
     expires-hours: ${ADMIN_AUTH_EXPIRES_HOURS:12}
+  # RabbitMQ topologies shared with gateway/worker. The common RabbitMQConfig and AlertMessageProducer already
+  # ship the same literals as @Value defaults, so this block is belt-and-suspenders for the DataManager producer.
+  rabbitmq:
+    exchange: alertworker.exchange
+    routing-key: alertworker.routing.key
+    queue: alertworker.queue
+    dlq: alertworker.dlq
+    dlx: alertworker.dlx
+  # DataManager-only scheduled-job tick (fixed delay between ticks; advisory-locked so one instance runs a tick)
+  scheduler:
+    tick-ms: 60000
 
 
 mybatis-plus:

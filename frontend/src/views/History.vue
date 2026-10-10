@@ -14,6 +14,13 @@
         <Select v-model="filters.status" clearable filterable placeholder="状态" class="filter-item">
           <Option v-for="s in statusOptions" :key="s.value" :value="s.value">{{ s.label }}</Option>
         </Select>
+        <!-- #AI-CODE-FUNCTION-dev_release/v0.0.1-20261008: unified history type filter (ALERT / TEST / REPORT) -->
+        <Select v-model="filters.messageType" clearable filterable placeholder="类型" class="filter-item">
+          <Option value="">全部</Option>
+          <Option value="ALERT">告警</Option>
+          <Option value="TEST">测试</Option>
+          <Option value="REPORT">日报</Option>
+        </Select>
         <DatePicker :value="filters.startDate" type="datetime" format="yyyy-MM-dd HH:mm:ss" placeholder="开始时间" clearable class="filter-item date-item" @on-change="setStartDate" />
         <DatePicker :value="filters.endDate" type="datetime" format="yyyy-MM-dd HH:mm:ss" placeholder="结束时间" clearable class="filter-item date-item" @on-change="setEndDate" />
         <Select v-model="filters.inDeadLetter" clearable filterable placeholder="死信队列" class="filter-item">
@@ -34,7 +41,9 @@
         </template>
         <template #action="{ row }">
           <Button size="small" @click="openDetail(row.id)">详情</Button>
-          <Button v-if="row.inDeadLetter" size="small" type="primary" @click="retry(row)">重试</Button>
+          <!-- #AI-CODE-FUNCTION-dev_release/v0.0.1-20261008: TEST/REPORT rows never flow through the alert pipeline,
+               re-enqueueing them would be meaningless — hide the dead-letter retry for those types -->
+          <Button v-if="row.inDeadLetter && row.messageType !== 'TEST' && row.messageType !== 'REPORT'" size="small" type="primary" @click="retry(row)">重试</Button>
         </template>
       </Table>
       <div class="pager">
@@ -54,10 +63,16 @@
             </Tag>
           </div>
           <div class="detail-item"><label>重试次数</label><span>{{ detail.retryCount }}</span></div>
+          <!-- #AI-CODE-FUNCTION-dev_release/v0.0.2-20261009: hosted-HTML report archive link -->
+          <div v-if="detail.contentUrl" class="detail-item"><label>归档</label>
+            <a :href="detail.contentUrl" target="_blank" rel="noopener" class="archive-link">查看完整日报</a>
+          </div>
         </div>
 
         <div class="trace-title">耗时链路（毫秒）</div>
-        <div class="trace">
+        <!-- #AI-CODE-FUNCTION-dev_release/v0.0.1-20261008: rows that never entered the MQ (silenced, unmatched,
+             report-pending, test/report generated) have no gwSentAt — show a flat note instead of a fake timeline -->
+        <div v-if="detail.gwSentAt" class="trace">
           <div class="trace-node">
             <div class="trace-dot"></div>
             <div class="trace-label">接收</div>
@@ -96,6 +111,13 @@
             <div class="trace-time">{{ fmtTime(detail.finishedAt) }}</div>
           </div>
         </div>
+        <div v-else class="trace-flat">
+          <div v-for="node in ['接收', '入队', 'Worker 接收', '外部发送', '完成']" :key="node" class="trace-flat-node">
+            <span class="trace-flat-label">{{ node }}</span>
+            <span class="trace-flat-dash">—</span>
+          </div>
+          <div class="form-tip">该消息未进入消息队列（网关直接落库），无 MQ 耗时链路</div>
+        </div>
 
         <div class="raw-title-row">
           <div class="raw-title">告警内容</div>
@@ -118,6 +140,7 @@ import { ref, reactive, computed, onMounted, h } from 'vue'
 import { Tag, Button, Message } from 'view-ui-plus'
 import request, { gatewayRequest } from '../api/request.js'
 import { prettyJson } from '../utils/json'
+import { fmtTime } from '../utils/time.js'
 
 const loading = ref(false)
 const data = ref([])
@@ -132,6 +155,7 @@ const detail = ref(null)
 const filters = reactive({
   messageNo: '',
   status: '',
+  messageType: '',
   startDate: '',
   endDate: '',
   inDeadLetter: '',
@@ -148,11 +172,27 @@ const statusOptions = [
   { value: 'success', label: '成功' },
   // #AI-CODE-FUNCTION-dev_release/v0.0.1-20260917: dropped at the gateway — silenced rule, or no matching rule
   { value: 'SILENCED', label: '已静默' },
-  { value: 'UNMATCHED', label: '未匹配' }
+  { value: 'UNMATCHED', label: '未匹配' },
+  // #AI-CODE-FUNCTION-dev_release/v0.0.1-20261008: stored for the daily report instead of being sent
+  { value: 'REPORT_PENDING', label: '已入库待日报' }
 ]
 
 const columns = [
   { title: '告警 ID', key: 'messageNo', width: 180 },
+  // #AI-CODE-FUNCTION-dev_release/v0.0.1-20261008: unified type column (ALERT / TEST / REPORT)
+  {
+    title: '类型', key: 'messageType', width: 90, align: 'center',
+    render: (h, p) => {
+      const t = p.row.messageType
+      const map = {
+        ALERT: ['blue', '告警'],
+        TEST: ['orange', '测试'],
+        REPORT: ['purple', '日报']
+      }
+      const [color, text] = map[t] || ['default', t || '—']
+      return h(Tag, { props: { color } }, () => text)
+    }
+  },
   { title: '内容', slot: 'content', minWidth: 600 },
   { title: '规则名', key: 'ruleName', width: 140, render: (h, p) => h('span', {}, p.row.ruleName || '--') },
   { title: '渠道', key: 'channelNames', width: 160, render: (h, p) => h('span', { class: 'channel-cell' }, p.row.channelNames || '--') },
@@ -168,7 +208,9 @@ const columns = [
         GW_SENT: ['st-info', '已入队'],
         recieved: ['st-info', '已接收'],
         SILENCED: ['st-silenced', '已静默'],
-        UNMATCHED: ['st-unmatched', '未匹配']
+        UNMATCHED: ['st-unmatched', '未匹配'],
+        // #AI-CODE-FUNCTION-dev_release/v0.0.1-20261008: stored for the daily report instead of being sent
+        REPORT_PENDING: ['st-report-pending', '已入库待日报']
       }
       const [cls, text] = map[s] || ['st-info', s || '--']
       return h('span', { class: 'status-badge ' + cls }, text)
@@ -182,7 +224,8 @@ const columns = [
       : h('span', { class: 'dim' }, '—')
   },
   { title: '重试', key: 'retryCount', width: 70, align: 'center' },
-  { title: '接收时间', key: 'createdAt', width: 165 },
+  { title: '接收时间', key: 'createdAt', width: 165,
+    render: (h, p) => h('span', {}, fmtTime(p.row.createdAt)) },
   { title: '操作', slot: 'action', width: 140 }
 ]
 
@@ -191,6 +234,8 @@ const buildParams = () => ({
   size: pageSize.value,
   messageNo: filters.messageNo || undefined,
   status: filters.status || undefined,
+  // #AI-CODE-FUNCTION-dev_release/v0.0.1-20261008: empty string = no type filter
+  messageType: filters.messageType || undefined,
   startDate: filters.startDate || undefined,
   endDate: filters.endDate || undefined,
   inDeadLetter: filters.inDeadLetter === 'yes' ? true : filters.inDeadLetter === 'no' ? false : undefined,
@@ -228,6 +273,7 @@ const setEndDate = (v) => {
 const reset = () => {
   filters.messageNo = ''
   filters.status = ''
+  filters.messageType = ''
   filters.startDate = ''
   filters.endDate = ''
   filters.inDeadLetter = ''
@@ -277,11 +323,6 @@ const msBetween = (a, b) => {
   const t2 = new Date(b).getTime()
   if (isNaN(t1) || isNaN(t2) || t2 < t1) return '--'
   return (t2 - t1) + 'ms'
-}
-
-const fmtTime = (t) => {
-  if (!t) return '--'
-  return String(t).replace('T', ' ').slice(0, 19)
 }
 
 const formatContent = (row) => prettyJson(row.payload || '')
@@ -376,6 +417,8 @@ onMounted(fetch)
 .st-silenced { color: #9b8fd0; background: rgba(155, 143, 208, 0.16); }
 /* #AI-CODE-FUNCTION-dev_release/v0.0.1-20260917: status of an alert dropped because no rule matched */
 .st-unmatched { color: var(--aw-info); background: rgba(127, 180, 201, 0.16); }
+/* #AI-CODE-FUNCTION-dev_release/v0.0.1-20261008: stored for the daily report instead of being sent */
+.st-report-pending { color: #9b8fd0; background: rgba(155, 143, 208, 0.16); }
 .st-failed {
   color: #fff;
   background: var(--aw-error);
@@ -393,6 +436,7 @@ onMounted(fetch)
 }
 .detail-item label { display: block; font-size: 13px; color: var(--aw-text-faint); margin-bottom: 4px; }
 .detail-item .mono { font-family: Consolas, monospace; color: var(--aw-accent); }
+.archive-link { color: var(--aw-accent); text-decoration: underline; }
 .trace-title, .raw-title { font-size: 13px; font-weight: 600; color: var(--aw-text); margin: 18px 0 10px; }
 .raw-title-row { display: flex; align-items: center; justify-content: space-between; margin: 18px 0 10px; }
 .raw-title-row .raw-title { margin: 0; }
@@ -405,6 +449,21 @@ onMounted(fetch)
 .trace-seg { flex: 1; min-width: 60px; height: 2px; background: var(--aw-border); margin-top: 6px; position: relative; display: flex; justify-content: center; }
 .trace-seg.done { background: var(--aw-primary); }
 .trace-seg-text { position: absolute; top: 10px; font-size: 11px; color: var(--aw-text-secondary); background: var(--aw-card); padding: 0 6px; white-space: nowrap; }
+/* #AI-CODE-FUNCTION-dev_release/v0.0.1-20261008: flat placeholder for rows that never entered the MQ */
+.trace-flat {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px;
+  align-items: center;
+  background: var(--aw-panel);
+  border: 1px solid var(--aw-border-light);
+  border-radius: 8px;
+  padding: 12px 14px;
+}
+.trace-flat-node { display: flex; flex-direction: column; align-items: center; gap: 4px; min-width: 78px; }
+.trace-flat-label { font-size: 13px; color: var(--aw-text-secondary); }
+.trace-flat-dash { font-size: 12px; color: var(--aw-text-faint); }
+.trace-flat .form-tip { margin: 0; width: 100%; font-size: 12px; color: var(--aw-text-faint); }
 .raw-payload {
   background: var(--aw-bg-deep);
   border: 1px solid var(--aw-border-light);

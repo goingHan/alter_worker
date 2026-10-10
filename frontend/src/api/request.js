@@ -82,4 +82,7 @@ const request = createRequest('/pw/alertworker/dm/api/v1')
 // gateway：告警接入与通道测试等
 export const gatewayRequest = createRequest('/pw/alertworker/gw/api/v1')
 
+// processor：数据加工模块（周期任务手动触发：周期测试消息 / 日报立即生成）
+export const processorRequest = createRequest('/pw/alertworker/dp/api/v1')
+
 export default request

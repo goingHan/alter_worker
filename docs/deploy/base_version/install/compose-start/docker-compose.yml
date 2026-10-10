@@ -4,7 +4,7 @@
 #   db      —— 内置 PostgreSQL（用外部库时不启用）
 #   mq      —— 内置 RabbitMQ（用外部 MQ 时不启用）
 #   nacos   —— 内置 Nacos 配置中心（用外部 Nacos 时不启用）
-#   app     —— 三个后端应用 + nginx（前端静态资源 / API 反向代理）
+#   app     —— 四个后端应用 + nginx（前端静态资源 / API 反向代理）
 #
 # 内部全套启动：
 #   docker compose --profile db --profile mq --profile nacos --profile app up -d
@@ -139,6 +139,14 @@ services:
       MAIL_PORT: ${MAIL_PORT:-587}
       MAIL_USERNAME: ${MAIL_USERNAME:-alerts@example.com}
       MAIL_PASSWORD: ${MAIL_PASSWORD:-your-email-password}
+      STORAGE_TYPE: ${STORAGE_TYPE:-oss}
+      STORAGE_PUBLIC_BASE_URL: ${STORAGE_PUBLIC_BASE_URL:-https://chatfiles.tydiczt.com}
+      STORAGE_BUCKET: ${STORAGE_BUCKET:-nbchat-prod}
+      STORAGE_HOME: ${STORAGE_HOME:-tmp_digital}
+      OSS_ENDPOINT: ${OSS_ENDPOINT:-oss-cn-beijing.aliyuncs.com}
+      OSS_REGION: ${OSS_REGION:-cn-beijing}
+      OSS_ACCESS_KEY_ID: ${OSS_ACCESS_KEY_ID:-}
+      OSS_ACCESS_KEY_SECRET: ${OSS_ACCESS_KEY_SECRET:-}
     volumes:
       - ./conf/nacos:/work:ro
     entrypoint:
@@ -178,6 +186,14 @@ services:
             -e "s|@MAIL_PORT@|$${MAIL_PORT}|g" \
             -e "s|@MAIL_USERNAME@|$${MAIL_USERNAME}|g" \
             -e "s|@MAIL_PASSWORD@|$${MAIL_PASSWORD}|g" \
+            -e "s|@STORAGE_TYPE@|$${STORAGE_TYPE}|g" \
+            -e "s|@STORAGE_PUBLIC_BASE_URL@|$${STORAGE_PUBLIC_BASE_URL}|g" \
+            -e "s|@STORAGE_BUCKET@|$${STORAGE_BUCKET}|g" \
+            -e "s|@STORAGE_HOME@|$${STORAGE_HOME}|g" \
+            -e "s|@OSS_ENDPOINT@|$${OSS_ENDPOINT}|g" \
+            -e "s|@OSS_REGION@|$${OSS_REGION}|g" \
+            -e "s|@OSS_ACCESS_KEY_ID@|$${OSS_ACCESS_KEY_ID}|g" \
+            -e "s|@OSS_ACCESS_KEY_SECRET@|$${OSS_ACCESS_KEY_SECRET}|g" \
             /work/shared-config.yaml.template > /tmp/shared-config.yaml
         echo "[nacos-init] publishing shared-config.yaml ..."
         curl -fs -X POST "$${NACOS_ADDR}/nacos/v1/cs/configs" \
@@ -204,6 +220,7 @@ services:
     profiles: ["app"]
     environment:
       <<: *backend-env
+      TZ: ${TZ:-Asia/Shanghai}
       SERVER_PORT: "8083"
       NODE_HOST: datamanager
       SPRING_FLYWAY_ENABLED: "true"
@@ -244,6 +261,7 @@ services:
     profiles: ["app"]
     environment:
       <<: *backend-env
+      TZ: ${TZ:-Asia/Shanghai}
       SERVER_PORT: "8081"
       NODE_HOST: gateway
       SPRING_FLYWAY_ENABLED: "false"
@@ -277,6 +295,7 @@ services:
     profiles: ["app"]
     environment:
       <<: *backend-env
+      TZ: ${TZ:-Asia/Shanghai}
       SERVER_PORT: "8082"
       NODE_HOST: worker
       SPRING_FLYWAY_ENABLED: "false"
@@ -292,6 +311,44 @@ services:
         required: false
       nacos:
         condition: service_healthy
+        required: false
+    restart: unless-stopped
+
+  # 数据加工模块：周期测试消息 + 日报生成（HTML 报告渲染并上传对象存储）
+  processor:
+    build:
+      context: ../../..
+      dockerfile: docs/deploy/compose-start/docker/backend.Dockerfile
+      args:
+        MODULE: alertworker-processor
+        PORT: "8084"
+    image: alertworker-processor:latest
+    container_name: alertworker-processor
+    profiles: ["app"]
+    environment:
+      <<: *backend-env
+      TZ: ${TZ:-Asia/Shanghai}
+      SERVER_PORT: "8084"
+      NODE_HOST: processor
+      SPRING_FLYWAY_ENABLED: "false"
+      # #AI-CODE-FUNCTION-dev_release/v0.0.2-20261009: 不再注入 STORAGE_*/OSS_* 环境变量——OS 环境变量优先级高于 Nacos，
+      # 会遮蔽 Nacos 里的 alertworker.storage。存储配置由 nacos-init 从 .env 渲染进 shared-config.yaml 提供。
+      # 如确需临时覆盖，请用标准 ALERTWORKER_STORAGE_* 变量。
+    ports:
+      - "${PROCESSOR_PORT:-8084}:8084"
+    networks: [alertworker-net]
+    depends_on:
+      postgres:
+        condition: service_healthy
+        required: false
+      rabbitmq:
+        condition: service_healthy
+        required: false
+      nacos:
+        condition: service_healthy
+        required: false
+      datamanager:
+        condition: service_started
         required: false
     restart: unless-stopped
 
@@ -346,6 +403,9 @@ services:
         condition: service_started
         required: false
       gateway:
+        condition: service_started
+        required: false
+      processor:
         condition: service_started
         required: false
     restart: unless-stopped

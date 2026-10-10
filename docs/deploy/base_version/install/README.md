@@ -94,7 +94,13 @@ scp -r frontend/dist user@server:/opt/alertworker/frontend/
 - **方式 A（推荐）**：使用 compose 工程的 `nacos-init` 容器自动发布（见 compose-start README §7），或按其模板 [`compose-start/conf/nacos/shared-config.yaml.template`](./compose-start/conf/nacos/shared-config.yaml.template) 在 Nacos 控制台手工创建（dataId=`shared-config.yaml`，group=`DEFAULT_GROUP`，namespace=你的命名空间，占位符 `@VAR@` 手工替换为真实值）。
 - **方式 B**：不用 Nacos 存业务配置——仍然必须有 Nacos 可达，但数据库/MQ 等全部用环境变量或外置文件覆盖（见 §6，环境变量优先级高于 Nacos 导入）。
 
+> 若启用 **HTML 日报**（数据加工模块 `alertworker-processor` 渲染并上传对象存储），还需在 `shared-config.yaml` 中补充 `alertworker.storage.*`（OSS bucket / endpoint / 公网基址 / AK-SK）。完整配置说明见 [对象存储配置](../../../design/object-storage-config.md)。
+>
+> ⚠️ processor 的本地 `application.yml` **不再定义 `alertworker.storage`**（2026-10-09 变更），运行时以 Nacos 为唯一来源；**不要**再用 `STORAGE_*` / `OSS_*` 环境变量——OS 环境变量优先级高于 Nacos，会遮蔽 Nacos 导致日报仍上传到旧桶。临时覆盖请用标准 `ALERTWORKER_STORAGE_*`。
+
 ### 5.2 启动命令
+
+> **时区要求**：JVM 时区必须是 `Asia/Shanghai`（后端以 CST 墙钟时间落库与展示，历史数据已由 Flyway `V12` 一次性 +8h 校正）。启动时加 `-Duser.timezone=Asia/Shanghai`，或在环境变量中设 `TZ=Asia/Shanghai`（Docker 部署由 compose 自动注入 `TZ`）。
 
 **datamanager（先启动，负责建表）：**
 
@@ -150,6 +156,9 @@ nohup java -jar alertworker-worker-1.0.0-SNAPSHOT.jar \
 | `NODE_HOST` | 节点管理页显示的主机名；节点测试接口按 `http://<NODE_HOST>:<port>/<前缀>/...` 探测，务必填可解析地址 |
 | `DATAMANAGER_ADMIN_TOKEN` / `ADMIN_USERNAME` / `ADMIN_PASSWORD` / `ADMIN_AUTH_SECRET` | datamanager 管理端认证（生产必改） |
 | `SPRING_DATASOURCE_URL` / `SPRING_RABBITMQ_HOST` 等 | 覆盖 Nacos 里的同名配置（优先级更高，见 §6） |
+| `TZ` / `-Duser.timezone` | JVM 时区，**必须为 `Asia/Shanghai`**（见 §5.2 顶部说明） |
+
+> 对象存储（processor）运行时以 Nacos 的 `alertworker.storage.*` 为准；临时覆盖用 `ALERTWORKER_STORAGE_*`（见 [对象存储配置](../../../design/object-storage-config.md)）。`STORAGE_*` / `OSS_*` 仅由 compose 的 `nacos-init` 用于渲染 Nacos，**不要**注入到 processor 容器。
 
 ### 5.3 启停脚本示例
 

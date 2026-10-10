@@ -30,7 +30,7 @@ public class DingDingChannelHandler {
     private final ObjectMapper objectMapper;
     private final RestTemplate restTemplate = new RestTemplate();
 
-    public boolean send(MessageChannel channel, List<AlertRecipient> recipients, String renderedContent) {
+    public boolean send(MessageChannel channel, List<AlertRecipient> recipients, String renderedContent, String linkUrl) {
         try {
             Map<String, Object> config = objectMapper.readValue(channel.getConfigJson(), Map.class);
             String webhookUrl = (String) config.get("webhookUrl");
@@ -43,8 +43,26 @@ public class DingDingChannelHandler {
             }
 
             String msgType = config.get("msgType") != null ? (String) config.get("msgType") : "text";
-            String content = DingDingConfigUtil.buildMessageContent(config.get("keyword"), renderedContent, msgType);
-            Map<String, Object> body = buildBody(msgType, content, config, recipients);
+            // #AI-CODE-FUNCTION-dev_release/v0.0.2-20261010: a hosted-HTML report link is appended to markdown/text
+            // messages; for action_card the URL becomes the card button target (handled in buildBody). DingDing rejects
+            // a non-absolute http(s) singleURL (e.g. a relative path or file:// when the report link is not resolvable),
+            // so when a link was supplied but is invalid we drop it and, for action_card, degrade to text so the report
+            // still reaches the group instead of failing the whole send.
+            String effectiveLink = isAbsoluteHttpUrl(linkUrl) ? linkUrl : null;
+            if (linkUrl != null && effectiveLink == null) {
+                log.warn("DingDing report link is not an absolute http(s) URL, ignoring it: {}", linkUrl);
+                if ("action_card".equals(msgType)) {
+                    msgType = "text";
+                }
+            }
+            String base = renderedContent == null ? "" : renderedContent;
+            if (effectiveLink != null && !"action_card".equals(msgType)) {
+                base = base + ("markdown".equals(msgType)
+                        ? "\n\n[查看完整内容](" + effectiveLink + ")"
+                        : "\n查看完整内容: " + effectiveLink);
+            }
+            String content = DingDingConfigUtil.buildMessageContent(config.get("keyword"), base, msgType);
+            Map<String, Object> body = buildBody(msgType, content, config, recipients, effectiveLink);
 
             HttpHeaders headers = new HttpHeaders();
             headers.setContentType(MediaType.APPLICATION_JSON);
@@ -60,6 +78,16 @@ public class DingDingChannelHandler {
             log.error("DingDing send failed", e);
             return false;
         }
+    }
+
+    // #AI-CODE-FUNCTION-dev_release/v0.0.2-20261010: DingDing requires an absolute http(s) URL for the action-card
+    // button / markdown link; a relative path or file:// makes the API reject the whole message.
+    private boolean isAbsoluteHttpUrl(String url) {
+        if (url == null) {
+            return false;
+        }
+        String trimmed = url.trim();
+        return trimmed.startsWith("http://") || trimmed.startsWith("https://");
     }
 
     private boolean isDingDingSuccess(ResponseEntity<String> response) {
@@ -83,7 +111,7 @@ public class DingDingChannelHandler {
     // #AI-CODE-FUNCTION-dev_release/v0.0.1-20260902: add DingDing @ (at) block for markdown/text
     // #AI-CODE-FUNCTION-dev_release/v0.0.1-20260907: batch all recipients of the same channel into a single message
     private Map<String, Object> buildBody(String msgType, String content, Map<String, Object> config,
-                                          List<AlertRecipient> recipients) {
+                                          List<AlertRecipient> recipients, String linkUrl) {
         Map<String, Object> at = buildAt(recipients);
         String mention = buildAtMentionText(recipients);
         return switch (msgType) {
@@ -108,7 +136,10 @@ public class DingDingChannelHandler {
                 card.put("title", actionCard != null ? actionCard.getOrDefault("title", "Alert") : "Alert");
                 card.put("text", content);
                 card.put("singleTitle", actionCard != null ? actionCard.getOrDefault("singleTitle", "View") : "View");
-                card.put("singleURL", actionCard != null ? actionCard.getOrDefault("singleUrl", "") : "");
+                // a hosted-HTML report URL overrides the configured button target
+                card.put("singleURL", linkUrl != null
+                        ? linkUrl
+                        : (actionCard != null ? actionCard.getOrDefault("singleUrl", "") : ""));
                 Map<String, Object> body = new HashMap<>();
                 body.put("msgtype", "actionCard");
                 body.put("actionCard", card);

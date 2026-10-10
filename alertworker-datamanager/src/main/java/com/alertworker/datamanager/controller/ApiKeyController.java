@@ -35,6 +35,14 @@ public class ApiKeyController {
         return apiKey;
     }
 
+    // #AI-CODE-FUNCTION-dev_release/v0.0.2-20261008: explicit reveal for the edit dialog, keeps list/get masked
+    @GetMapping("/{id}/reveal")
+    public ApiKey reveal(@PathVariable Long id) {
+        ApiKey apiKey = apiKeyMapper.selectById(id);
+        auditLogService.log("REVEAL", "API_KEY", id, "admin", null);
+        return apiKey;
+    }
+
     // #AI-CODE-dev_release/v0.0.1-20260604: add @Valid for input validation
     // #AI-CODE-FUNCTION-dev_release/v0.0.1-20260915: generate apiValue server-side so users never type the key
     @PostMapping

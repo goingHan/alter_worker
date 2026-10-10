@@ -83,12 +83,15 @@ public class AlertMessageController {
                                               @RequestParam(required = false) String endDate,
                                               @RequestParam(required = false) Boolean inDeadLetter,
                                               @RequestParam(required = false) String ruleName,
-                                              @RequestParam(required = false) String channelName) {
+                                              @RequestParam(required = false) String channelName,
+                                              // #AI-CODE-FUNCTION-dev_release/v0.0.1-20261008: unified history type
+                                              // filter (ALERT / TEST / REPORT)
+                                              @RequestParam(required = false) String messageType) {
         LocalDateTime start = parseStart(startDate);
         LocalDateTime end = parseEnd(endDate);
         return alertMessageMapper.searchHistory(
                 new Page<>(current, size),
-                messageNo, status, start, end, inDeadLetter, ruleName, channelName);
+                messageNo, status, start, end, inDeadLetter, ruleName, channelName, messageType);
     }
 
     private LocalDateTime parseStart(String value) {

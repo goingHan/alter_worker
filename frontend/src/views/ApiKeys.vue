@@ -28,8 +28,8 @@
           <div class="form-tip standalone">由系统自动生成，创建后仅显示一次</div>
         </FormItem>
         <FormItem v-else label="密钥值">
-          <Input v-model="formData.apiValue" placeholder="输入新值则更新密钥" />
-          <div class="form-tip">保持掩码值（****）则密钥不变，输入新值则更新</div>
+          <Input v-model="formData.apiValue" placeholder="直接修改即为更新密钥" />
+          <div class="form-tip">此处显示原始密钥，直接修改即为更新密钥；留空则保持不变</div>
         </FormItem>
         <FormItem label="速率限制">
           <InputNumber v-model="formData.rateLimit" :min="1" :max="10000" style="width: 100%" />
@@ -52,6 +52,7 @@
 import { ref, reactive, onMounted } from 'vue'
 import { Modal, Message, Alert } from 'view-ui-plus'
 import request from '../api/request.js'
+import { fmtTime } from '../utils/time.js'
 
 const loading = ref(false)
 const data = ref([])
@@ -70,7 +71,8 @@ const columns = [
   { title: '名称', key: 'name' },
   { title: '密钥值', key: 'apiValue', minWidth: 180 },
   { title: '速率限制(次/分)', key: 'rateLimit', width: 130, align: 'center' },
-  { title: '创建时间', key: 'createdAt', width: 170 },
+  { title: '创建时间', key: 'createdAt', width: 170,
+    render: (h, p) => h('span', {}, fmtTime(p.row.createdAt)) },
   { title: '操作', slot: 'action', width: 140 }
 ]
 
@@ -117,12 +119,18 @@ const openCreateModal = () => {
   modalVisible.value = true
 }
 
-const edit = (row) => {
+const edit = async (row) => {
   modalTitle.value = '编辑密钥'
   editingId.value = row.id
   formData.name = row.name
   formData.apiValue = row.apiValue || ''
   formData.rateLimit = row.rateLimit || 100
+  try {
+    const res = await request.get(`/api-keys/${row.id}/reveal`)
+    formData.apiValue = res.data?.apiValue || ''
+  } catch {
+    // 获取原始密钥失败时回退到列表中的掩码值
+  }
   modalVisible.value = true
 }
 

@@ -17,6 +17,7 @@
         <module>alertworker-datamanager</module>
         <module>alertworker-gateway</module>
         <module>alertworker-worker</module>
+        <module>alertworker-processor</module>
     </modules>
 
     <properties>

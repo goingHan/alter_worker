@@ -34,6 +34,8 @@ All three backend services depend on PostgreSQL, RabbitMQ, and Nacos. The fronte
 
 AlertWorker uses **Nacos** as its configuration center. Each service pulls a shared config (`alertworker-shared.yaml`) from Nacos at startup, and overrides local settings via environment variables.
 
+> 对象存储（HTML 日报托管：`alertworker.storage.*`、OSS 上传地址与公网访问地址、适配器扩展）的完整配置说明见 [object-storage-config.md](./object-storage-config.md)。
+
 ### Nacos Shared Config
 
 File: [`nacos-shared-config.yaml`](../../nacos-shared-config.yaml)

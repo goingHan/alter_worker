@@ -19,7 +19,9 @@ const routes = [
       { path: 'api-keys', component: () => import('../views/ApiKeys.vue') },
       { path: 'integration/prometheus', component: () => import('../views/Prometheus.vue') },
       { path: 'integration/notification', component: () => import('../views/NotificationGuide.vue') },
-      { path: 'nodes', component: () => import('../views/Nodes.vue') }
+      { path: 'nodes', component: () => import('../views/Nodes.vue') },
+      { path: 'test-message', component: () => import('../views/TestMessage.vue') },
+      { path: 'reports', component: () => import('../views/Reports.vue') }
     ]
   }
 ]

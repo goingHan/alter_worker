@@ -1,9 +1,10 @@
 import { defineConfig } from 'vite'
 import vue from '@vitejs/plugin-vue'
 
-// 默认：datamanager 8083（与 application.yml server.port 一致）/ gateway 8081；可用环境变量覆盖
+// 默认：datamanager 8083（与 application.yml server.port 一致）/ gateway 8081 / processor 8084；可用环境变量覆盖
 const datamanagerTarget = process.env.VITE_PROXY_DATAMANAGER || 'http://localhost:8083'
 const gatewayTarget = process.env.VITE_PROXY_GATEWAY || 'http://localhost:8081'
+const processorTarget = process.env.VITE_PROXY_PROCESSOR || 'http://localhost:8084'
 
 export default defineConfig({
   plugins: [vue()],
@@ -22,6 +23,10 @@ export default defineConfig({
       },
       '/pw/alertworker/gw': {
         target: gatewayTarget,
+        changeOrigin: true
+      },
+      '/pw/alertworker/dp': {
+        target: processorTarget,
         changeOrigin: true
       }
     }

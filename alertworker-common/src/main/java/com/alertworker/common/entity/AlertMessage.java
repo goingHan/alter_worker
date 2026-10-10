@@ -21,6 +21,14 @@ public class AlertMessage extends BaseEntity {
     private String channelNames;
     private MessageStatus status;
     private MessageSubStatus subStatus;
+    // #AI-CODE-FUNCTION-dev_release/v0.0.1-20261008: ALERT (normal ingest / test alert) | TEST (periodic channel test) | REPORT (daily report)
+    private String messageType;
+    // #AI-CODE-FUNCTION-dev_release/v0.0.1-20261008: for REPORT_PENDING rows, the id of the REPORT alert_message that aggregated this row
+    private Long reportMessageId;
+    // #AI-CODE-FUNCTION-dev_release/v0.0.2-20261009: for REPORT messages whose template is hosted HTML, the public
+    // URL of the uploaded file and the object storage key it lives under
+    private String contentUrl;
+    private String objectKey;
     private Integer retryCount;
     private LocalDateTime receivedAt;
     private LocalDateTime gwSentAt;

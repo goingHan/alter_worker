@@ -241,6 +241,10 @@ The payload **must** be a valid JSON object with the following requirements:
 #### Get API Key
 - **GET** `/pw/alertworker/dm/api/v1/api-keys/{id}`
 
+#### Reveal API Key
+- **GET** `/pw/alertworker/dm/api/v1/api-keys/{id}/reveal`
+- **Response**: 完整 `ApiKey` 对象，`apiValue` 为**明文**密钥（不脱敏）。仅供管理台编辑弹窗回显原始密钥使用，操作会记录 `REVEAL` 审计日志。
+
 #### Create API Key
 - **POST** `/pw/alertworker/dm/api/v1/api-keys`
 - **Body**（`apiValue` 由服务端自动生成，无需传入，传入值会被忽略）:
@@ -426,6 +430,7 @@ The payload **must** be a valid JSON object with the following requirements:
 {
   "name": "cpu-alert",
   "alertType": "PROMETHEUS",
+  "severity": "CRITICAL",
   "matchKey": "alertname",
   "matchValue": "CPUHigh",
   "matchLogic": "AND",
@@ -437,6 +442,7 @@ The payload **must** be a valid JSON object with the following requirements:
 }
 ```
 
+- `severity`（2026-10-10 起）：规则自带的告警级别 `INFO`/`WARNING`/`CRITICAL`（默认 `WARNING`）。规则级别为权威值，渲染模板与日报统计时**覆盖**告警系统传入的级别（模板可用 `{{ severity }}` / `{{ labels.severity }}` / `{{ ruleSeverity }}`）
 - `channelIds`（2026-09-16 起，Create/Update 均支持）：规则绑定的消息渠道 id 数组，可空；**全量替换**语义 —— 不传（null）= 不改动绑定，空数组 = 解除全部绑定（走渠道类型默认通道）
 - `silenced`（2026-09-17 起）：规则静默开关，默认 `false`。为 `true` 时该规则匹配到的告警在网关直接丢弃（不解析接收人、不发送任何渠道），只落一条 `SILENCED` 状态的 `alert_message` 供仪表盘展示
 

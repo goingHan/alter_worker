@@ -27,11 +27,24 @@
           </div>
         </Card>
       </Col>
-      <Col span="12">
+      <Col span="6">
+        <Card :bordered="false" class="summary-card">
+          <div class="summary-icon processor"><Icon type="ios-cog-outline" size="22" /></div>
+          <div>
+            <div class="summary-title">Processor 节点</div>
+            <div class="summary-value">
+              <span class="available">{{ summary.processorAvailable }}</span>
+              <span class="total">/ {{ summary.processorTotal }}</span>
+              <span class="summary-note">可用</span>
+            </div>
+          </div>
+        </Card>
+      </Col>
+      <Col span="6">
         <Card :bordered="false" class="legend-card">
           <div class="legend-note">
             <Icon type="ios-information-circle-outline" size="16" />
-            <span>节点每 10 秒上报一次心跳；超过 30 秒无心跳视为不可用。停用 Worker 后，其监听会自动暂停，消息由其他 Worker 继续处理。权重用于未来多节点负载调度。</span>
+            <span>节点每 10 秒上报一次心跳；超过 30 秒无心跳视为不可用。停用 Worker 后，其监听会自动暂停，消息由其他 Worker 继续处理。Processor 负责周期测试与日报生成。</span>
           </div>
         </Card>
       </Col>
@@ -112,9 +125,10 @@
 import { ref, onMounted, onUnmounted, h } from 'vue'
 import { Tag, Button, Modal, Message } from 'view-ui-plus'
 import request from '../api/request.js'
+import { fmtTime } from '../utils/time.js'
 
 const nodes = ref([])
-const summary = ref({ gatewayTotal: 0, gatewayAvailable: 0, workerTotal: 0, workerAvailable: 0 })
+const summary = ref({ gatewayTotal: 0, gatewayAvailable: 0, workerTotal: 0, workerAvailable: 0, processorTotal: 0, processorAvailable: 0 })
 const loading = ref(false)
 
 const weightVisible = ref(false)
@@ -157,9 +171,10 @@ const columns = [
   {
     title: '类型', key: 'nodeType', width: 100,
     render: (h, params) => {
-      const isWorker = params.row.nodeType === 'WORKER'
-      return h(Tag, { props: { color: isWorker ? 'blue' : 'green' } },
-        () => isWorker ? 'Worker' : 'Gateway')
+      const t = params.row.nodeType
+      const color = t === 'WORKER' ? 'blue' : t === 'PROCESSOR' ? 'purple' : 'green'
+      const label = t === 'WORKER' ? 'Worker' : t === 'PROCESSOR' ? 'Processor' : 'Gateway'
+      return h(Tag, { props: { color } }, () => label)
     }
   },
   {
@@ -189,11 +204,6 @@ const columns = [
   },
   { title: '操作', width: 180, render: renderActions }
 ]
-
-const fmtTime = (t) => {
-  if (!t) return '--'
-  return String(t).replace('T', ' ').slice(0, 19)
-}
 
 const fetchAll = async () => {
   loading.value = true
@@ -300,6 +310,7 @@ onUnmounted(() => {
 }
 .summary-icon.gateway { background: rgba(127, 191, 154, 0.14); color: var(--aw-accent); }
 .summary-icon.worker { background: rgba(127, 180, 201, 0.14); color: var(--aw-info); }
+.summary-icon.processor { background: rgba(170, 127, 201, 0.14); color: #aa7fc9; }
 
 .summary-title { font-size: 13px; color: var(--aw-text-secondary); margin-bottom: 2px; }
 .summary-value { font-size: 24px; font-weight: 600; color: var(--aw-text); }

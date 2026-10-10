@@ -59,6 +59,14 @@
             <Option value="JSON">JSON</Option>
           </Select>
         </FormItem>
+        <FormItem label="告警级别">
+          <Select v-model="formData.severity" style="width: 220px">
+            <Option value="INFO">INFO</Option>
+            <Option value="WARNING">WARNING</Option>
+            <Option value="CRITICAL">CRITICAL</Option>
+          </Select>
+          <div class="form-tip">规则自带告警级别，模板与日报按此级别展示，不再取告警系统传入的级别</div>
+        </FormItem>
         <FormItem label="匹配条件">
           <div class="match-list">
             <div v-for="(m, i) in matchList" :key="i" class="match-row">
@@ -80,6 +88,13 @@
           <div class="form-tip">
             开启后该规则匹配到的告警（含「测试告警」）在网关直接丢弃，不解析接收人、不发送任何渠道；
             丢弃记录会以「已静默」状态出现在仪表盘与告警历史中。
+          </div>
+        </FormItem>
+        <FormItem label="仅日报">
+          <i-switch v-model="formData.reportOnly" />
+          <div class="form-tip">
+            开启后该规则匹配到的告警不立即发送，而是以「已入库待日报」状态沉淀，
+            由「告警日报」按天聚合后统一渲染发送。
           </div>
         </FormItem>
         <FormItem label="最大重试">
@@ -274,11 +289,12 @@ const assigneeTargetKeys = ref([])
 const editGroups = ref([])
 const editAssignees = ref([])
 
-const formData = reactive({ name: '', alertType: '', retryMax: 3, retryBackoff: '5s,10s,20s', silenced: false })
+const formData = reactive({ name: '', alertType: '', severity: 'WARNING', retryMax: 3, retryBackoff: '5s,10s,20s', silenced: false, reportOnly: false })
 const matchList = ref([{ key: '', value: '', op: 'AND' }])
 const formChannelIds = ref([])
 
 const alertTypeText = (t) => (t === 'JSON' ? 'JSON' : t === 'PROMETHEUS' ? 'Prometheus' : (t || '--'))
+const severityColor = (s) => (s === 'CRITICAL' ? 'red' : s === 'INFO' ? 'blue' : 'orange')
 const channelTypeText = (t) => (t === 'EMAIL' ? '邮件' : t === 'DINGDING' ? '钉钉' : (t || '--'))
 
 // #AI-CODE-FUNCTION-dev_release/v0.0.1-20260916: 每条条件的有效运算符；新数据读 op，旧数据用 not/matchLogic 兼容
@@ -333,6 +349,10 @@ const columns = [
   { type: 'selection', width: 50, align: 'center' },
   { title: '名称', key: 'name' },
   { title: '告警类型', key: 'alertType', width: 110, render: (h, p) => h('span', {}, alertTypeText(p.row.alertType)) },
+  {
+    title: '级别', key: 'severity', width: 100, align: 'center',
+    render: (h, p) => h(Tag, { props: { color: severityColor(p.row.severity) } }, () => (p.row.severity || 'WARNING'))
+  },
   { title: '匹配条件', minWidth: 220, render: (h, p) => h('span', { class: 'match-summary' }, matchSummary(p.row)) },
   {
     title: '静默',
@@ -340,6 +360,16 @@ const columns = [
     width: 96,
     align: 'center',
     render: (h, p) => h(Tag, { props: { color: p.row.silenced ? 'orange' : 'default' } }, () => silencedText(p.row))
+  },
+  // #AI-CODE-FUNCTION-dev_release/v0.0.1-20261008: report-only rules feed the daily report instead of sending directly
+  {
+    title: '日报',
+    key: 'reportOnly',
+    width: 80,
+    align: 'center',
+    render: (h, p) => p.row.reportOnly
+      ? h(Tag, { props: { color: 'purple' } }, () => '日报')
+      : h('span', { class: 'assoc-empty' }, '—')
   },
   { title: '关联群组', key: 'groups', render: (h, p) => {
     const names = groupNamesMap.value[p.row.id] || []
@@ -749,9 +779,11 @@ const openCreateModal = async () => {
   editingId.value = null
   formData.name = ''
   formData.alertType = ''
+  formData.severity = 'WARNING'
   formData.retryMax = 3
   formData.retryBackoff = '5s,10s,20s'
   formData.silenced = false
+  formData.reportOnly = false
   matchList.value = [{ key: '', value: '', op: 'AND' }]
   formChannelIds.value = []
   editGroups.value = []
@@ -765,9 +797,11 @@ const edit = async (row) => {
   editingId.value = row.id
   formData.name = row.name
   formData.alertType = row.alertType
+  formData.severity = row.severity || 'WARNING'
   formData.retryMax = row.retryMax || 3
   formData.retryBackoff = row.retryBackoff || '5s,10s,20s'
   formData.silenced = row.silenced === true
+  formData.reportOnly = row.reportOnly === true
   matchList.value = parseConditions(row)
   formChannelIds.value = []
   await loadChannels()
@@ -817,6 +851,8 @@ const handleSubmit = async () => {
   const payload = {
     name: formData.name,
     alertType: formData.alertType,
+    // #AI-CODE-FUNCTION-dev_release/v0.0.2-20261010: the rule owns the alert level (INFO/WARNING/CRITICAL)
+    severity: formData.severity,
     matchKey: conditions[0].key,
     matchValue: conditions[0].value,
     // 始终落 matchConditions：后端 updateById 默认忽略 null 字段，置 null 会保留旧条件导致删除不生效
@@ -828,7 +864,9 @@ const handleSubmit = async () => {
     retryMax: formData.retryMax,
     retryBackoff: formData.retryBackoff,
     // 静默开关随规则表单一起保存；列表行内按钮走 /rules/{id}/silence 专用接口
-    silenced: formData.silenced === true
+    silenced: formData.silenced === true,
+    // #AI-CODE-FUNCTION-dev_release/v0.0.1-20261008: report-only rules feed the daily report
+    reportOnly: formData.reportOnly === true
   }
   if (editingId.value) {
     await request.put(`/rules/${editingId.value}`, payload)

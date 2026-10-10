@@ -30,3 +30,15 @@ alertworker:
     queue: alertworker.queue
     dlq: alertworker.dlq
     dlx: alertworker.dlx
+  # #AI-CODE-FUNCTION-dev_release/v0.0.2-20261009: 数据加工模块（processor）的 HTML 日报对象存储。
+  # 运行时唯一来源（processor 的本地 application.yml 不再定义 alertworker.storage，避免遮蔽 Nacos）。
+  storage:
+    type: oss
+    public-base-url: https://chatfiles-test.tydiczt.com
+    bucket: nbchat-test
+    home: tmp_ops_reports
+    oss:
+      endpoint: oss-cn-beijing.aliyuncs.com
+      region: cn-beijing
+      access-key-id: <OSS_ACCESS_KEY_ID>
+      access-key-secret: <OSS_ACCESS_KEY_SECRET>

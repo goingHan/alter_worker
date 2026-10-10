@@ -10,6 +10,7 @@
       </div>
       <Table :columns="columns" :data="data" :loading="loading">
         <template #action="{ row }">
+          <Button size="small" :type="row.enabled === false ? 'success' : 'warning'" @click="toggleStatus(row)">{{ row.enabled === false ? '启用' : '停用' }}</Button>
           <Button size="small" @click="edit(row)">编辑</Button>
           <Button size="small" type="error" @click="remove(row.id)">删除</Button>
         </template>
@@ -40,6 +41,10 @@
             <Option v-for="g in allGroups" :key="g.id" :value="g.id">{{ g.name }}</Option>
           </Select>
         </FormItem>
+        <FormItem label="状态">
+          <i-switch v-model="formData.enabled" />
+          <span class="form-tip" style="margin-left: 8px">停用后不再给该联系人发送邮件，也不会在钉钉中 @ 该联系人</span>
+        </FormItem>
       </Form>
     </Modal>
   </div>
@@ -47,8 +52,9 @@
 
 <script setup>
 import { ref, reactive, onMounted } from 'vue'
-import { Modal, Message } from 'view-ui-plus'
+import { Modal, Message, Tag } from 'view-ui-plus'
 import request from '../api/request.js'
+import { fmtTime } from '../utils/time.js'
 
 const loading = ref(false)
 const data = ref([])
@@ -62,7 +68,7 @@ const allGroups = ref([])
 const groupNamesMap = ref({})
 const originalGroupIds = ref([])
 
-const formData = reactive({ cnName: '', phone: '', dingdingUsername: '', email: '', groupIds: [] })
+const formData = reactive({ cnName: '', phone: '', dingdingUsername: '', email: '', groupIds: [], enabled: true })
 
 const columns = [
   { title: '中文姓名', key: 'cnName' },
@@ -72,8 +78,13 @@ const columns = [
     const names = groupNamesMap.value[p.row.id] || []
     return h('span', {}, names.length ? names.join('、') : '—')
   } },
-  { title: '创建时间', key: 'createdAt', width: 170 },
-  { title: '操作', slot: 'action', width: 140 }
+  {
+    title: '状态', key: 'enabled', width: 90, align: 'center',
+    render: (h, p) => h(Tag, { props: { color: p.row.enabled === false ? 'default' : 'green' } }, () => (p.row.enabled === false ? '停用' : '启用'))
+  },
+  { title: '创建时间', key: 'createdAt', width: 170,
+    render: (h, p) => h('span', {}, fmtTime(p.row.createdAt)) },
+  { title: '操作', slot: 'action', width: 210 }
 ]
 
 const fetch = async () => {
@@ -132,6 +143,23 @@ const remove = async (id) => {
   })
 }
 
+// #AI-CODE-FUNCTION-dev_release/v0.0.2-20261010: enable/disable toggle — a disabled assignee receives no email
+// and is not @-mentioned in DingDing (skipped during recipient resolution at the gateway/report stage)
+const toggleStatus = (row) => {
+  const next = row.enabled === false
+  Modal.confirm({
+    title: next ? '启用确认' : '停用确认',
+    content: next
+      ? `确定重新启用「${row.cnName}」吗？启用后将恢复向其发送邮件与钉钉 @。`
+      : `确定停用「${row.cnName}」吗？停用后不再向其发送邮件，也不会在钉钉中 @ 该联系人。`,
+    onOk: async () => {
+      await request.put(`/assignees/${row.id}/status`, { enabled: next })
+      Message.success({ content: next ? '已启用' : '已停用' })
+      fetch()
+    }
+  })
+}
+
 const openCreateModal = () => {
   modalTitle.value = '新建人员'
   editingId.value = null
@@ -140,6 +168,7 @@ const openCreateModal = () => {
   formData.dingdingUsername = ''
   formData.email = ''
   formData.groupIds = []
+  formData.enabled = true
   originalGroupIds.value = []
   if (!allGroups.value.length) fetchGroups()
   modalVisible.value = true
@@ -152,6 +181,7 @@ const edit = async (row) => {
   formData.phone = row.phone || ''
   formData.dingdingUsername = row.dingdingUsername || ''
   formData.email = row.email || ''
+  formData.enabled = row.enabled !== false
   if (!allGroups.value.length) await fetchGroups()
   try {
     const res = await request.get(`/assignees/${row.id}/groups`)
@@ -171,7 +201,8 @@ const handleSubmit = async () => {
     cnName: formData.cnName,
     phone: formData.phone,
     dingdingUsername: formData.dingdingUsername,
-    email: formData.email
+    email: formData.email,
+    enabled: formData.enabled !== false
   }
   if (editingId.value) {
     await request.put(`/assignees/${editingId.value}`, payload)

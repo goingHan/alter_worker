@@ -53,6 +53,7 @@ public class NodeController {
         List<NodeRegistry> nodes = nodeRegistryMapper.selectList(new LambdaQueryWrapper<NodeRegistry>()
                 .eq(NodeRegistry::getDeleted, 0));
         long gatewayTotal = 0, gatewayAvailable = 0, workerTotal = 0, workerAvailable = 0;
+        long processorTotal = 0, processorAvailable = 0;
         for (NodeRegistry node : nodes) {
             boolean available = isAvailable(node);
             if ("GATEWAY".equals(node.getNodeType())) {
@@ -61,6 +62,9 @@ public class NodeController {
             } else if ("WORKER".equals(node.getNodeType())) {
                 workerTotal++;
                 if (available) workerAvailable++;
+            } else if ("PROCESSOR".equals(node.getNodeType())) {
+                processorTotal++;
+                if (available) processorAvailable++;
             }
         }
         Map<String, Object> result = new HashMap<>();
@@ -68,6 +72,8 @@ public class NodeController {
         result.put("gatewayAvailable", gatewayAvailable);
         result.put("workerTotal", workerTotal);
         result.put("workerAvailable", workerAvailable);
+        result.put("processorTotal", processorTotal);
+        result.put("processorAvailable", processorAvailable);
         return result;
     }
 
@@ -133,10 +139,12 @@ public class NodeController {
             return ResponseEntity.notFound().build();
         }
         String nodeType = node.getNodeType() != null ? node.getNodeType() : "WORKER";
-        // URL = 工程前缀 /pw/alertworker + 模块 context-path（gateway=/gw，worker=/worker，见各 application.yml）
-        String path = "GATEWAY".equals(nodeType)
-                ? "/pw/alertworker/gw/api/v1/gateway/test"
-                : "/pw/alertworker/worker/api/v1/worker/test";
+        // URL = 工程前缀 /pw/alertworker + 模块 context-path（gateway=/gw，worker=/worker，processor=/dp，见各 application.yml）
+        String path = switch (nodeType) {
+            case "GATEWAY" -> "/pw/alertworker/gw/api/v1/gateway/test";
+            case "PROCESSOR" -> "/pw/alertworker/dp/api/v1/processor/test";
+            default -> "/pw/alertworker/worker/api/v1/worker/test";
+        };
         String url = "http://" + node.getHost() + ":" + node.getPort() + path;
         try {
             ResponseEntity<Map> response = restTemplate.getForEntity(url, Map.class);

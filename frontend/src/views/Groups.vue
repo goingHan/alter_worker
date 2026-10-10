@@ -76,6 +76,7 @@
 import { ref, reactive, onMounted } from 'vue'
 import { Modal, Message } from 'view-ui-plus'
 import request from '../api/request.js'
+import { fmtTime } from '../utils/time.js'
 
 const loading = ref(false)
 const data = ref([])
@@ -101,7 +102,8 @@ const channelText = (t) => (t === 'EMAIL' ? '邮件' : '钉钉')
 const columns = [
   { title: '名称', key: 'name' },
   { title: '发送类型', key: 'sendType', width: 130, render: (h, p) => h('span', {}, sendTypeText(p.row.sendType)) },
-  { title: '创建时间', key: 'createdAt', width: 170 },
+  { title: '创建时间', key: 'createdAt', width: 170,
+    render: (h, p) => h('span', {}, fmtTime(p.row.createdAt)) },
   { title: '操作', slot: 'action', width: 190 }
 ]
 
