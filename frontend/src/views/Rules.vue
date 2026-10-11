@@ -347,7 +347,7 @@ const toggleSilence = (row) => {
 
 const columns = [
   { type: 'selection', width: 50, align: 'center' },
-  { title: '名称', key: 'name' },
+  { title: '名称', key: 'name', minWidth: 240, tooltip: true },
   { title: '告警类型', key: 'alertType', width: 110, render: (h, p) => h('span', {}, alertTypeText(p.row.alertType)) },
   {
     title: '级别', key: 'severity', width: 100, align: 'center',
@@ -371,7 +371,7 @@ const columns = [
       ? h(Tag, { props: { color: 'purple' } }, () => '日报')
       : h('span', { class: 'assoc-empty' }, '—')
   },
-  { title: '关联群组', key: 'groups', render: (h, p) => {
+  { title: '关联群组', key: 'groups', minWidth: 160, render: (h, p) => {
     const names = groupNamesMap.value[p.row.id] || []
     return h('span', {}, names.length ? names.join('、') : '—')
   } },
