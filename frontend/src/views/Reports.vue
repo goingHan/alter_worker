@@ -28,6 +28,12 @@
         <FormItem label="Cron 表达式">
           <Input v-model="formData.cronExpr" placeholder="0 5 8 * * *" />
         </FormItem>
+        <FormItem label="统计时间">
+          <TimePicker v-model="formData.statStartTime" type="time" format="HH:mm" placeholder="起始 00:00" style="width: 130px" />
+          <span class="range-sep">至</span>
+          <TimePicker v-model="formData.statEndTime" type="time" format="HH:mm" placeholder="结束 23:59" style="width: 130px" />
+          <div class="form-tip">统计当天的告警时间段，范围 00:00–23:59；留空表示统计全天</div>
+        </FormItem>
         <FormItem label="启用">
           <i-switch v-model="formData.enabled" />
         </FormItem>
@@ -114,7 +120,7 @@ const allRules = ref([])
 const allAssignees = ref([])
 const allChannels = ref([])
 
-const formData = reactive({ name: '', cronExpr: '', enabled: false, templateId: null })
+const formData = reactive({ name: '', cronExpr: '', enabled: false, templateId: null, statStartTime: '', statEndTime: '' })
 const formRuleIds = ref([])
 const formChannelIds = ref([])
 const recipientRows = ref([])
@@ -130,6 +136,15 @@ const originalTrendRuleIds = ref([])
 const alertTypeText = (t) => (t === 'JSON' ? 'JSON' : t === 'PROMETHEUS' ? 'Prometheus' : (t || '--'))
 const channelTypeText = (t) => (t === 'EMAIL' ? '邮件' : t === 'DINGDING' ? '钉钉' : (t || '--'))
 const channelText = (t) => (t === 'EMAIL' ? '邮件' : '钉钉')
+
+// #AI-CODE-FUNCTION-dev_release/v0.0.2-20261012: LocalTime comes back as "HH:mm:ss"; the TimePicker uses "HH:mm"
+const hhmm = (t) => (t ? String(t).slice(0, 5) : '')
+const statRangeText = (row) => {
+  const s = hhmm(row.statStartTime)
+  const e = hhmm(row.statEndTime)
+  if (!s && !e) return '全天'
+  return `${s || '00:00'} - ${e || '23:59'}`
+}
 
 const templateName = (id) => {
   if (!id) return '--'
@@ -160,6 +175,7 @@ const onTrendTransferChange = (keys) => {
 const columns = [
   { title: '名称', key: 'name' },
   { title: 'Cron 表达式', key: 'cronExpr', width: 150, render: (h, p) => h('span', { class: 'mono-cell' }, p.row.cronExpr || '--') },
+  { title: '统计时间', key: 'statRange', width: 140, render: (h, p) => h('span', { class: 'mono-cell' }, statRangeText(p.row)) },
   { title: '模板', key: 'templateId', width: 140, render: (h, p) => h('span', {}, templateName(p.row.templateId)) },
   {
     title: '启用',
@@ -259,6 +275,8 @@ const openCreateModal = async () => {
   formData.cronExpr = ''
   formData.enabled = false
   formData.templateId = null
+  formData.statStartTime = ''
+  formData.statEndTime = ''
   formRuleIds.value = []
   formChannelIds.value = []
   recipientRows.value = []
@@ -280,6 +298,8 @@ const edit = async (row) => {
   formData.cronExpr = row.cronExpr || ''
   formData.enabled = row.enabled === true
   formData.templateId = row.templateId || null
+  formData.statStartTime = hhmm(row.statStartTime)
+  formData.statEndTime = hhmm(row.statEndTime)
   formRuleIds.value = []
   formChannelIds.value = []
   recipientRows.value = []
@@ -313,7 +333,9 @@ const handleSubmit = async () => {
         name: formData.name,
         cronExpr: formData.cronExpr.trim(),
         enabled: formData.enabled === true,
-        templateId: formData.templateId
+        templateId: formData.templateId,
+        statStartTime: formData.statStartTime || null,
+        statEndTime: formData.statEndTime || null
       })
       reportId = editingId.value
     } else {
@@ -321,7 +343,9 @@ const handleSubmit = async () => {
         name: formData.name,
         cronExpr: formData.cronExpr.trim(),
         enabled: formData.enabled === true,
-        templateId: formData.templateId
+        templateId: formData.templateId,
+        statStartTime: formData.statStartTime || null,
+        statEndTime: formData.statEndTime || null
       })
       reportId = res.data?.id
     }
@@ -426,6 +450,7 @@ onMounted(() => {
 .card-title { font-size: 15px; font-weight: 600; color: var(--aw-text); }
 .pager { margin-top: 12px; text-align: right; }
 .form-tip { margin-left: 10px; font-size: 12px; color: var(--aw-text-faint); }
+.range-sep { margin: 0 8px; color: var(--aw-text-faint); }
 .mono-cell { font-family: Consolas, monospace; font-size: 12px; color: var(--aw-text-secondary); }
 
 .recipient-list { display: flex; flex-direction: column; gap: 8px; width: 100%; }

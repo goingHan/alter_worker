@@ -99,7 +99,8 @@ public class TestAlertController {
                 .filter(r -> Boolean.TRUE.equals(r.get("success"))
                         && !Boolean.TRUE.equals(r.get("silenced"))
                         && !Boolean.TRUE.equals(r.get("unmatched"))
-                        && !Boolean.TRUE.equals(r.get("reportPending")))
+                        && !Boolean.TRUE.equals(r.get("reportPending"))
+                        && !Boolean.TRUE.equals(r.get("warningPending")))
                 .count();
         long silenced = results.stream()
                 .filter(r -> Boolean.TRUE.equals(r.get("silenced")))
@@ -109,6 +110,9 @@ public class TestAlertController {
                 .count();
         long reportPending = results.stream()
                 .filter(r -> Boolean.TRUE.equals(r.get("reportPending")))
+                .count();
+        long warningPending = results.stream()
+                .filter(r -> Boolean.TRUE.equals(r.get("warningPending")))
                 .count();
         // #AI-CODE-FUNCTION-dev_release/v0.0.1-20260917: dropped test alerts (silenced rule, or a manual payload that
         // matched no rule) must be reported as dropped instead of a plain success, otherwise the operator assumes a
@@ -123,10 +127,14 @@ public class TestAlertController {
         if (reportPending > 0) {
             message.append("，").append(reportPending).append(" 条为日报类型已入库待日报");
         }
+        if (warningPending > 0) {
+            message.append("，").append(warningPending).append(" 条为 WARNING/INFO 类型已入库待汇总");
+        }
         body.put("message", message.toString());
         body.put("silencedCount", silenced);
         body.put("unmatchedCount", unmatched);
         body.put("reportPendingCount", reportPending);
+        body.put("warningPendingCount", warningPending);
         body.put("results", results);
         return ResponseEntity.ok(body);
     }
@@ -154,6 +162,7 @@ public class TestAlertController {
         row.put("silenced", result.silenced());
         row.put("unmatched", result.unmatched());
         row.put("reportPending", result.reportPending());
+        row.put("warningPending", result.warningPending());
         row.put("error", result.error());
         return row;
     }

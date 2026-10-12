@@ -174,7 +174,9 @@ const statusOptions = [
   { value: 'SILENCED', label: '已静默' },
   { value: 'UNMATCHED', label: '未匹配' },
   // #AI-CODE-FUNCTION-dev_release/v0.0.1-20261008: stored for the daily report instead of being sent
-  { value: 'REPORT_PENDING', label: '已入库待日报' }
+  { value: 'REPORT_PENDING', label: '已入库待日报' },
+  // #AI-CODE-FUNCTION-dev_release/v0.0.2-20261012: parked for the warning digest instead of being sent one-by-one
+  { value: 'WARNING_PENDING', label: '已入库待汇总' }
 ]
 
 const columns = [
@@ -187,7 +189,8 @@ const columns = [
       const map = {
         ALERT: ['blue', '告警'],
         TEST: ['orange', '测试'],
-        REPORT: ['purple', '日报']
+        REPORT: ['purple', '日报'],
+        WARNING_DIGEST: ['purple', '汇总']
       }
       const [color, text] = map[t] || ['default', t || '—']
       return h(Tag, { props: { color } }, () => text)
@@ -210,7 +213,8 @@ const columns = [
         SILENCED: ['st-silenced', '已静默'],
         UNMATCHED: ['st-unmatched', '未匹配'],
         // #AI-CODE-FUNCTION-dev_release/v0.0.1-20261008: stored for the daily report instead of being sent
-        REPORT_PENDING: ['st-report-pending', '已入库待日报']
+        REPORT_PENDING: ['st-report-pending', '已入库待日报'],
+        WARNING_PENDING: ['st-report-pending', '已入库待汇总']
       }
       const [cls, text] = map[s] || ['st-info', s || '--']
       return h('span', { class: 'status-badge ' + cls }, text)

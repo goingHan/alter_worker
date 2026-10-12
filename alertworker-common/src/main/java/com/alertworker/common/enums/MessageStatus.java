@@ -14,5 +14,8 @@ public enum MessageStatus {
     // also dropped at the gateway (no recipients, no MQ), counted separately from failures on the dashboard
     UNMATCHED,
     // suppressed report-only alert awaiting daily-report aggregation
-    REPORT_PENDING
+    REPORT_PENDING,
+    // #AI-CODE-FUNCTION-dev_release/v0.0.2-20261012: suppressed WARNING-severity alert awaiting the warning digest;
+    // stored without enqueueing while the digest switch is on
+    WARNING_PENDING
 }

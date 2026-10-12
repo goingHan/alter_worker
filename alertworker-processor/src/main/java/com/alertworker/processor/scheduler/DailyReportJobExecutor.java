@@ -14,7 +14,6 @@ import com.alertworker.common.entity.DailyReportTrendRule;
 import com.alertworker.common.entity.MessageChannel;
 import com.alertworker.common.entity.MessageTemplate;
 import com.alertworker.common.entity.ScheduledJob;
-import com.alertworker.common.enums.AlertType;
 import com.alertworker.common.enums.ChannelType;
 import com.alertworker.common.enums.MessageKind;
 import com.alertworker.common.enums.MessageStatus;
@@ -39,7 +38,6 @@ import com.alertworker.common.util.MessageNoGenerator;
 import com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper;
 import com.baomidou.mybatisplus.core.conditions.update.LambdaUpdateWrapper;
 import com.fasterxml.jackson.core.JsonProcessingException;
-import com.fasterxml.jackson.core.type.TypeReference;
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import lombok.RequiredArgsConstructor;
@@ -83,13 +81,13 @@ public class DailyReportJobExecutor implements JobExecutor {
 
     public static final String JOB_TYPE = "DAILY_REPORT";
     private static final String MESSAGE_NO_PREFIX = "REPORT-";
-    private static final String UNKNOWN = "UNKNOWN";
     private static final String MESSAGE_TYPE_ALERT = "ALERT";
     private static final String MESSAGE_TYPE_REPORT = "REPORT";
     private static final ZoneId ZONE = ZoneId.of("Asia/Shanghai");
     private static final int MAX_DETAIL_ROWS = 200;
 
     private final ObjectMapper objectMapper;
+    private final AlertRowExtractor alertRowExtractor;
     private final DailyReportMapper dailyReportMapper;
     private final DailyReportRuleMapper dailyReportRuleMapper;
     private final DailyReportRecipientMapper dailyReportRecipientMapper;
@@ -159,10 +157,11 @@ public class DailyReportJobExecutor implements JobExecutor {
             }
         }
 
-        // 3. Aggregation window: the run's calendar day in Asia/Shanghai.
+        // 3. Aggregation window: the run's calendar day in Asia/Shanghai, narrowed to the report's configured
+        // statistic window when present (stat_start_time inclusive, stat_end_time inclusive at minute granularity).
         LocalDate today = LocalDate.now(ZONE);
-        LocalDateTime start = today.atStartOfDay();
-        LocalDateTime end = today.plusDays(1).atStartOfDay();
+        LocalDateTime start = windowStart(report, today);
+        LocalDateTime end = windowEnd(report, today);
 
         // 4. Alert rows for the report's rules over the run day — both REPORT_PENDING (report-only rules) and normally
         // delivered alerts, so a report may summarize any rule. This is a FULL-DAY SNAPSHOT: every run re-aggregates
@@ -191,7 +190,7 @@ public class DailyReportJobExecutor implements JobExecutor {
                 .filter(java.util.Objects::nonNull)
                 .distinct()
                 .toList();
-        Map<String, Object> reportContext = buildReportContext(today, rows, rulesById, trendRuleIds);
+        Map<String, Object> reportContext = buildReportContext(today, start, end, rows, rulesById, trendRuleIds);
 
         // 7. Recipients: daily_report_recipient (assignee + channel type) x daily_report_channel bindings
         // (per-type default-channel fallback).
@@ -304,6 +303,24 @@ public class DailyReportJobExecutor implements JobExecutor {
                 .last("LIMIT 1"));
     }
 
+    /**
+     * Aggregation-window start within the run day: the report's configured {@code statStartTime}, or 00:00 when
+     * unset.
+     */
+    private LocalDateTime windowStart(DailyReport report, LocalDate today) {
+        return report.getStatStartTime() != null ? today.atTime(report.getStatStartTime()) : today.atStartOfDay();
+    }
+
+    /**
+     * Aggregation-window end (exclusive) within the run day: {@code statEndTime} is inclusive at minute granularity,
+     * so 23:59 becomes the next day 00:00. Falls back to the full day when unset.
+     */
+    private LocalDateTime windowEnd(DailyReport report, LocalDate today) {
+        return report.getStatEndTime() != null
+                ? today.atTime(report.getStatEndTime()).plusMinutes(1)
+                : today.plusDays(1).atStartOfDay();
+    }
+
     private Long parseReportId(ScheduledJob job) {
         if (job.getConfigJson() == null || job.getConfigJson().isBlank()) {
             return null;
@@ -318,7 +335,8 @@ public class DailyReportJobExecutor implements JobExecutor {
         }
     }
 
-    private Map<String, Object> buildReportContext(LocalDate today, List<AlertMessage> rows,
+    private Map<String, Object> buildReportContext(LocalDate today, LocalDateTime start, LocalDateTime end,
+                                                    List<AlertMessage> rows,
                                                     Map<Long, AlertRule> rulesById,
                                                     List<Long> trendRuleIds) {
         Map<Long, Integer> ruleCounts = new LinkedHashMap<>();
@@ -330,7 +348,7 @@ public class DailyReportJobExecutor implements JobExecutor {
         for (int i = 0; i < rows.size(); i++) {
             AlertMessage row = rows.get(i);
             Long ruleId = row.getAlertRuleId() != null ? row.getAlertRuleId() : 0L;
-            RowInfo info = extractRowInfo(row, rulesById.get(ruleId));
+            AlertRowExtractor.RowInfo info = alertRowExtractor.extract(row, rulesById.get(ruleId));
             ruleCounts.merge(ruleId, 1, Integer::sum);
             severityCounts.merge(info.severity(), 1, Integer::sum);
             serviceTypeCounts.merge(info.serviceType(), 1, Integer::sum);
@@ -365,21 +383,18 @@ public class DailyReportJobExecutor implements JobExecutor {
         // #AI-CODE-FUNCTION-dev_release/v0.0.2-20261010: per-rule trend monitoring items — each selected rule gets
         // 平均/中位数/P20/P40/P60/P80/最大/最小 of its per-hour alert counts over the run day.
         if (trendRuleIds != null && !trendRuleIds.isEmpty()) {
-            context.put("trends", buildTrends(today, trendRuleIds, rulesById));
+            context.put("trends", buildTrends(start, end, trendRuleIds, rulesById));
         }
         return context;
     }
 
     /**
-     * Per-rule trend for the run day: for each selected monitoring rule, takes its alert counts of the day bucketed by
+     * Per-rule trend for the run window: for each selected monitoring rule, takes its alert counts bucketed by
      * hour (0–23, missing hours = 0) as the sample set and computes 平均 / 中位数 / P20 / P40 / P60 / P80 / 最大 / 最小.
      * Percentiles use linear interpolation so they match the dashboard's {@code PERCENTILE_CONT} semantics.
      */
-    private List<Map<String, Object>> buildTrends(LocalDate today, List<Long> trendRuleIds,
+    private List<Map<String, Object>> buildTrends(LocalDateTime start, LocalDateTime end, List<Long> trendRuleIds,
                                                   Map<Long, AlertRule> rulesById) {
-        LocalDateTime start = today.atStartOfDay();
-        LocalDateTime end = today.plusDays(1).atStartOfDay();
-
         Map<Long, int[]> hourlyByRule = new LinkedHashMap<>();
         for (Long ruleId : trendRuleIds) {
             hourlyByRule.put(ruleId, new int[24]);
@@ -402,9 +417,16 @@ public class DailyReportJobExecutor implements JobExecutor {
             if (series == null) {
                 continue;
             }
+            // Only sample the hourly buckets that fall inside the configured window (full day => all 24 hours, so a
+            // report without a stat window keeps its previous behaviour).
             List<Integer> values = new ArrayList<>(series.length);
-            for (int v : series) {
-                values.add(v);
+            LocalDate day = start.toLocalDate();
+            for (int h = 0; h < series.length; h++) {
+                LocalDateTime hourStart = day.atTime(h, 0);
+                LocalDateTime hourEnd = hourStart.plusHours(1);
+                if (hourEnd.isAfter(start) && hourStart.isBefore(end)) {
+                    values.add(series[h]);
+                }
             }
             List<Integer> sorted = new ArrayList<>(values);
             sorted.sort(Integer::compareTo);
@@ -461,84 +483,6 @@ public class DailyReportJobExecutor implements JobExecutor {
 
     private double round2(double value) {
         return Math.round(value * 100.0) / 100.0;
-    }
-
-    /**
-     * Per-row severity/service_type/summary. Severity comes from the RULE (the rule owns the alert level, not the
-     * incoming payload); service_type/summary are alert-type aware: JSON reads top-level keys, PROMETHEUS navigates
-     * {@code alerts[0].labels} / {@code alerts[0].annotations} (mirrors {@code AlertRuleMatcher.extractValue} /
-     * {@code extractPrometheusLabel} — multi-alert Prometheus payloads only carry the first alert's labels).
-     * Missing values fall back to {@code UNKNOWN} (summary falls back to the messageNo).
-     */
-    private RowInfo extractRowInfo(AlertMessage row, AlertRule rule) {
-        String severity = rule != null && rule.getSeverity() != null
-                ? rule.getSeverity().name() : UNKNOWN;
-        Map<String, Object> payload = parsePayload(row.getPayload());
-        String serviceType = UNKNOWN;
-        String summary = null;
-        if (payload != null) {
-            if (rule != null && rule.getAlertType() == AlertType.PROMETHEUS) {
-                Map<?, ?> firstAlert = firstAlertMap(payload);
-                Map<?, ?> labels = mapField(firstAlert, "labels");
-                serviceType = orUnknown(readMapValue(labels, "service_type"));
-                summary = readMapValue(mapField(firstAlert, "annotations"), "summary");
-            } else {
-                serviceType = orUnknown(stringValue(payload.get("service_type")));
-                Object title = payload.get("title");
-                Object content = payload.get("content");
-                summary = title != null ? String.valueOf(title) : content != null ? String.valueOf(content) : null;
-            }
-        }
-        if (summary == null || summary.isBlank()) {
-            summary = row.getMessageNo();
-        }
-        return new RowInfo(severity, serviceType, summary);
-    }
-
-    private Map<String, Object> parsePayload(String payload) {
-        if (payload == null || payload.isBlank()) {
-            return null;
-        }
-        try {
-            return objectMapper.readValue(payload, new TypeReference<>() {
-            });
-        } catch (Exception e) {
-            log.warn("Failed to parse alert_message payload for aggregation: {}", e.getMessage());
-            return null;
-        }
-    }
-
-    private Map<?, ?> firstAlertMap(Map<String, Object> payload) {
-        Object alertsObj = payload.get("alerts");
-        if (!(alertsObj instanceof List<?> alerts) || alerts.isEmpty()) {
-            return null;
-        }
-        Object first = alerts.get(0);
-        return first instanceof Map<?, ?> map ? map : null;
-    }
-
-    private Map<?, ?> mapField(Map<?, ?> parent, String key) {
-        if (parent == null) {
-            return null;
-        }
-        Object value = parent.get(key);
-        return value instanceof Map<?, ?> map ? map : null;
-    }
-
-    private String readMapValue(Map<?, ?> map, String key) {
-        if (map == null) {
-            return null;
-        }
-        Object value = map.get(key);
-        return value == null ? null : String.valueOf(value);
-    }
-
-    private String stringValue(Object value) {
-        return value == null ? null : String.valueOf(value);
-    }
-
-    private String orUnknown(String value) {
-        return value == null || value.isBlank() ? UNKNOWN : value;
     }
 
     private String ruleName(AlertRule rule, Long ruleId) {
@@ -697,9 +641,6 @@ public class DailyReportJobExecutor implements JobExecutor {
             });
         }
         return namesById.isEmpty() ? null : String.join(", ", namesById.values());
-    }
-
-    private record RowInfo(String severity, String serviceType, String summary) {
     }
 
     /**

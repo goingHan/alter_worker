@@ -84,6 +84,7 @@ public class DailyReportController {
     @Transactional
     public DailyReport create(@Valid @RequestBody DailyReport entity) {
         validateCron(entity.getCronExpr());
+        validateStatWindow(entity);
         dailyReportMapper.insert(entity);
         ScheduledJob job = syncScheduledJob(entity);
         entity.setScheduledJobId(job.getId());
@@ -100,6 +101,7 @@ public class DailyReportController {
             throw new IllegalArgumentException("Daily report not found: " + id);
         }
         validateCron(entity.getCronExpr());
+        validateStatWindow(entity);
         entity.setId(id);
         if (entity.getScheduledJobId() == null) {
             entity.setScheduledJobId(existing.getScheduledJobId());
@@ -279,6 +281,17 @@ public class DailyReportController {
             CronExpression.parse(cronExpr);
         } catch (IllegalArgumentException e) {
             throw new IllegalArgumentException("Invalid cron expression: " + e.getMessage());
+        }
+    }
+
+    /**
+     * The optional statistics window must be a valid range within the day: if both ends are set, the start must not
+     * be after the end. Either side may be omitted (falls back to 00:00 / 24:00 in the executor).
+     */
+    private void validateStatWindow(DailyReport report) {
+        if (report.getStatStartTime() != null && report.getStatEndTime() != null
+                && report.getStatStartTime().isAfter(report.getStatEndTime())) {
+            throw new IllegalArgumentException("统计起始时间不能晚于结束时间");
         }
     }
 

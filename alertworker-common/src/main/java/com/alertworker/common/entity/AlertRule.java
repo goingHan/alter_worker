@@ -51,6 +51,10 @@ public class AlertRule extends BaseEntity {
     // (never enqueued) and aggregated by the daily-report job. Silence takes precedence over this flag.
     private Boolean reportOnly;
 
+    // #AI-CODE-FUNCTION-dev_release/v0.0.2-20261012: while TRUE, matching WARNING/INFO alerts are delivered
+    // immediately instead of being parked for the warning digest ("忽略聚合").
+    private Boolean ignoreDigest;
+
     // #AI-CODE-FUNCTION-dev_release/v0.0.1-20260916: request-only field; null = leave bindings untouched,
     // empty list = unbind all (fall back to default channels)
     @TableField(exist = false)

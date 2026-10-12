@@ -100,10 +100,12 @@ public class AlertController {
             // #AI-CODE-FUNCTION-dev_release/v0.0.1-20260917: a dropped alert (silenced rule, or no matching rule at
             // all) answers 2xx because it was accepted and handled, but never reaches a channel — so the status must
             // say which drop happened instead of the usual GW_SENT
-            String status = result.unmatched() ? "UNMATCHED" : result.silenced() ? "SILENCED" : "GW_SENT";
+            String status = result.unmatched() ? "UNMATCHED" : result.silenced() ? "SILENCED"
+                    : result.warningPending() ? "WARNING_PENDING" : "GW_SENT";
             body.put("status", status);
             body.put("silenced", result.silenced());
             body.put("unmatched", result.unmatched());
+            body.put("warningPending", result.warningPending());
             body.put("recipientCount", result.recipientCount());
             if (result.unmatched()) {
                 body.put("reason", result.error());

@@ -69,6 +69,10 @@
               <Icon type="ios-paper-outline" />
               <span title="告警日报">告警日报</span>
             </MenuItem>
+            <MenuItem name="/warning-digest" to="/warning-digest">
+              <Icon type="ios-warning-outline" />
+              <span title="告警汇总">告警汇总</span>
+            </MenuItem>
           </Submenu>
           <Submenu name="integration">
             <template #title>
@@ -178,7 +182,8 @@ const pageTitles = {
   '/integration/notification': '通知对接',
   '/nodes': '节点管理',
   '/test-message': '周期测试消息',
-  '/reports': '告警日报'
+  '/reports': '告警日报',
+  '/warning-digest': '告警汇总'
 }
 
 const pageTitle = computed(() => pageTitles[route.path] || 'AlertWorker')

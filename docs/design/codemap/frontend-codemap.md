@@ -18,7 +18,9 @@
 | 通知渠道（通知链路） | `/channels` | `frontend/src/views/Channels.vue` |
 | API 密钥（接入管理） | `/api-keys` | `frontend/src/views/ApiKeys.vue` |
 | 节点管理（系统管理） | `/nodes` | `frontend/src/views/Nodes.vue` |
-
+| 周期测试消息（通知配置） | `/test-message` | `frontend/src/views/TestMessage.vue` |
+| 告警日报（通知配置） | `/reports` | `frontend/src/views/Reports.vue` |
+| 告警汇总（通知配置） | `/warning-digest` | `frontend/src/views/WarningDigest.vue` |
 ## 2. 全局壳（App.vue）
 
 | UI 区域 | 位置 |
@@ -134,6 +136,8 @@ SSE 的 token 从 localStorage 读取（`History.vue:164`），不走 axios。
 | `/rules*` | datamanager | `AlertRuleController` |
 | `/sse/alerts` | datamanager | `AlertSseController` |
 | `/api/v1/worker/test`、`/api/v1/gateway/test`（节点自检，由 NodeController 代理调用） | worker / gateway | `WorkerSelfTestController` / `GatewaySelfTestController` |
+| `/scheduled-jobs?jobType=WARNING_DIGEST`（GET/PUT，汇总开关+频率） | datamanager | `ScheduledJobController` |
+| `/warning-digest/run`（立即生成汇总） | processor | `WarningDigestController` |
 
 ## 6. 症状 → 定位指南
 
@@ -150,6 +154,7 @@ SSE 的 token 从 localStorage 读取（`History.vue:164`），不走 axios。
 | 「告警没发出来 / 群里收不到但历史有记录」 | 先看规则是否被静默：`Rules.vue` 静默列/`toggleSilence` → `/rules/{id}/silence` → 网关 `AlertIngestService.ingest` 静默分支；历史页状态筛选 `SILENCED` |
 | 「仪表盘「已静默」卡片或面板是空的」 | `/stats/overview` 的 `silenced` + `/stats/silenced`；确认 24h 窗口内确有 `status = SILENCED` 记录（`alert_message`） |
 | 「有告警进来但没人收到、历史里状态是「未匹配」」 | 没有任何规则命中 → 网关直接丢弃（`AlertIngestService.ingest` 的 `rule == null` 分支）；查 `Dashboard.vue` 未匹配面板确认报文的 labels/keys，再去 `Rules.vue` 补规则或修匹配条件 |
+| 「WARNING/INFO 告警不发出来 / 汇总页为空」 | 汇总开关（`WarningDigest.vue` → `/scheduled-jobs?jobType=WARNING_DIGEST`）是否开启；开启后这些告警落 `WARNING_PENDING`（历史页状态筛选）→ 等汇总频率或点「立即生成」；规则若开了「忽略聚合」则本应立即发送。收件人来自各规则联系人，检查规则/通信组是否配置 |
 | 「登录页卡片没有位移特效 / 特效不生效」 | 默认走 `engine="filter"`（`components/canvasui/svg-displacement.js`），不依赖实验特性，任何现代浏览器都该有效果——先按下面顺序排查：① 移动要够快（`:threshold="900"` 是 px/s 门槛，慢慢划过卡片不会触发）；② 打开控制台看有没有 `[canvasui] SVG displacement is unavailable`（构造 filter 抛错时会保持普通 HTML）；③ Elements 面板里移动时应能看到内容层临时挂上 `filter: url(#aw-displacement-1)`，静止后消失（没有 filter 节点就是引擎没起来）；④ 只有显式写了 `engine="canvas"`/`"auto"` 时才依赖实验性 **HTML-in-Canvas** API：`supportsHtmlInCanvas()`（`displacement-engine.js:68`）探测 `ctx.drawElementImage` + `canvas.requestPaint`，Chrome 需 `chrome://flags/#canvas-draw-element`（Canary 再加 `#enable-experimental-web-platform-features`），探测不到会自动退回 `filter` |
 
 ## 6.5 静默功能（2026-09-17 新增）
@@ -179,6 +184,21 @@ SSE 的 token 从 localStorage 读取（`History.vue:164`），不走 axios。
 
 判定要点：**未匹配 ≠ 失败**。`failed` 只统计 `FAILED`（网关异常 / Worker 发送失败），未匹配计入 `unmatched`，也不写 `dead_letter_message`。
 
+## 6.7 告警汇总（WARNING/INFO，2026-10-12 新增）
+
+WARNING / INFO 级别告警不再逐条发送，改为按频率汇总成一个 HTML 页面统一推送；通知人不在本页配置，由各告警规则自身联系人合并去重。规则表单的「忽略聚合」开关（`alert_rule.ignore_digest`）可让个别规则即使 WARNING/INFO 也立即发送。
+
+| 层 | 位置 | 说明 |
+|---|---|---|
+| 配置页 | `WarningDigest.vue` → `/warning-digest`（通知配置菜单） | 开关 + Cron + 可选模板；走 `GET/PUT /scheduled-jobs?jobType=WARNING_DIGEST`（datamanager），`job.enabled` 即开关 |
+| 即时生成 | `WarningDigest.vue runOnce` | `POST /pw/alertworker/dp/api/v1/warning-digest/run`（processor `WarningDigestController`） |
+| 网关分流 | `AlertIngestService.ingest`（severity=WARNING/INFO、`ignoreDigest` 未开、且 `WarningDigestGate.enabled()`） | 落 `WARNING_PENDING`、不发 MQ；优先级 静默 > report_only > 汇总 |
+| 规则开关 | `Rules.vue` 编辑弹窗「忽略聚合」+ 表格「忽略聚合」列 | `alert_rule.ignore_digest`；开启后 WARNING/INFO 也立即逐条发送 |
+| 汇总任务 | processor `WarningDigestJobExecutor`（`jobType=WARNING_DIGEST`） | 聚合未认领的 `WARNING_PENDING` 行 → 渲染内置 HTML（`内置-WARNING汇总模板`，含客户端关键字筛选）→ 上传对象存储 → 走 REPORT 派发；收件人 = 各规则联系人合并去重 |
+| 认领标记 | `alert_message.digest_message_id` | 与日报的 `report_message_id` 分离，互不干扰；发送失败由 Worker 释放 |
+
+判定要点：**开关关闭 = 现状**（WARNING/INFO 逐条即时发送）。汇总仅在开关开启时生效；`WARNING_PENDING` 行仍可被显式配置的日报统计到（两套管线各自认领，不冲突）。
+
 ## 7. 已知问题清单
 
 1. `Groups.vue` Send Type 选项值与后端 `SendType` 枚举（`SERVICE_TYPE`/`ALL`）不匹配 → 保存组必失败
@@ -203,6 +223,6 @@ frontend/src/components/canvasui/rect-cache.js       矩形缓存（避免指针
 frontend/src/components/canvasui/svg-displacement.js SVG feDisplacementMap 位移引擎（默认，全浏览器可用）
 frontend/src/components/canvasui/displacement-engine.js  WebGL2 位移特效引擎（框架无关，纯 JS，需实验 API）
 frontend/src/components/canvasui/Displacement.vue     Vue 3 包裹组件（13 个 props，engine 选择引擎）
-frontend/src/views/{页面名}.vue         11 个页面，见速查表
+frontend/src/views/{页面名}.vue         页面见速查表
 frontend/vite.config.js                 开发代理
 ```

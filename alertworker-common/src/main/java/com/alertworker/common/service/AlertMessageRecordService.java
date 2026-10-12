@@ -83,6 +83,14 @@ public class AlertMessageRecordService {
                 "Message " + messageId + " stored as report-only pending for alert rule " + alertRuleId);
     }
 
+    // #AI-CODE-FUNCTION-dev_release/v0.0.2-20261012: WARNING-severity alert parked while the warning digest is on —
+    // the periodic digest job aggregates it into one hosted HTML page instead of delivering it immediately
+    public void transitionToWarningPending(Long messageId, Long alertRuleId) {
+        updateStatus(messageId, MessageStatus.WARNING_PENDING, null);
+        auditLogService.logEvent("GW_WARNING_PENDING",
+                "Message " + messageId + " stored as warning-digest pending for alert rule " + alertRuleId);
+    }
+
     private void updateStatus(Long messageId, MessageStatus status, MessageSubStatus subStatus) {
         LambdaUpdateWrapper<AlertMessage> wrapper = new LambdaUpdateWrapper<AlertMessage>()
                 .eq(AlertMessage::getId, messageId)

@@ -302,9 +302,11 @@ public class AlertMessageProcessor {
      * {@code 告警日报 2026-10-09（共 42 条告警）}.
      */
     private String reportLinkLabel(Map<String, Object> context) {
+        Object title = context == null ? null : context.get("title");
         Object date = context == null ? null : context.get("date");
         Object total = context == null ? null : context.get("totalCount");
-        StringBuilder sb = new StringBuilder("告警日报");
+        String label = title != null && !String.valueOf(title).isBlank() ? String.valueOf(title) : "告警日报";
+        StringBuilder sb = new StringBuilder(label);
         if (date != null) {
             sb.append(' ').append(date);
         }
@@ -343,6 +345,11 @@ public class AlertMessageProcessor {
         alertMessageMapper.update(null, new LambdaUpdateWrapper<AlertMessage>()
                 .eq(AlertMessage::getReportMessageId, messageId)
                 .set(AlertMessage::getReportMessageId, null));
+        // #AI-CODE-FUNCTION-dev_release/v0.0.2-20261012: a WARNING digest that died for good must release its claimed
+        // WARNING_PENDING rows too so a later digest re-aggregates them.
+        alertMessageMapper.update(null, new LambdaUpdateWrapper<AlertMessage>()
+                .eq(AlertMessage::getDigestMessageId, messageId)
+                .set(AlertMessage::getDigestMessageId, null));
     }
 
     private long calculateBackoffDelay(int retryCount, String backoffStr) {

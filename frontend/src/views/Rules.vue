@@ -97,6 +97,12 @@
             由「告警日报」按天聚合后统一渲染发送。
           </div>
         </FormItem>
+        <FormItem label="忽略聚合">
+          <i-switch v-model="formData.ignoreDigest" />
+          <div class="form-tip">
+            默认关闭。开启后即使告警级别为 WARNING / INFO，也立即逐条发送，不进入「告警汇总」，无需等待汇总频率。
+          </div>
+        </FormItem>
         <FormItem label="最大重试">
           <InputNumber v-model="formData.retryMax" :min="1" :max="10" style="width: 100%" />
         </FormItem>
@@ -289,7 +295,7 @@ const assigneeTargetKeys = ref([])
 const editGroups = ref([])
 const editAssignees = ref([])
 
-const formData = reactive({ name: '', alertType: '', severity: 'WARNING', retryMax: 3, retryBackoff: '5s,10s,20s', silenced: false, reportOnly: false })
+const formData = reactive({ name: '', alertType: '', severity: 'WARNING', retryMax: 3, retryBackoff: '5s,10s,20s', silenced: false, reportOnly: false, ignoreDigest: false })
 const matchList = ref([{ key: '', value: '', op: 'AND' }])
 const formChannelIds = ref([])
 
@@ -369,6 +375,16 @@ const columns = [
     align: 'center',
     render: (h, p) => p.row.reportOnly
       ? h(Tag, { props: { color: 'purple' } }, () => '日报')
+      : h('span', { class: 'assoc-empty' }, '—')
+  },
+  // #AI-CODE-FUNCTION-dev_release/v0.0.2-20261012: rules that opt out of the WARNING/INFO digest and send immediately
+  {
+    title: '忽略聚合',
+    key: 'ignoreDigest',
+    width: 96,
+    align: 'center',
+    render: (h, p) => p.row.ignoreDigest
+      ? h(Tag, { props: { color: 'cyan' } }, () => '忽略')
       : h('span', { class: 'assoc-empty' }, '—')
   },
   { title: '关联群组', key: 'groups', minWidth: 160, render: (h, p) => {
@@ -784,6 +800,7 @@ const openCreateModal = async () => {
   formData.retryBackoff = '5s,10s,20s'
   formData.silenced = false
   formData.reportOnly = false
+  formData.ignoreDigest = false
   matchList.value = [{ key: '', value: '', op: 'AND' }]
   formChannelIds.value = []
   editGroups.value = []
@@ -802,6 +819,7 @@ const edit = async (row) => {
   formData.retryBackoff = row.retryBackoff || '5s,10s,20s'
   formData.silenced = row.silenced === true
   formData.reportOnly = row.reportOnly === true
+  formData.ignoreDigest = row.ignoreDigest === true
   matchList.value = parseConditions(row)
   formChannelIds.value = []
   await loadChannels()
@@ -866,7 +884,9 @@ const handleSubmit = async () => {
     // 静默开关随规则表单一起保存；列表行内按钮走 /rules/{id}/silence 专用接口
     silenced: formData.silenced === true,
     // #AI-CODE-FUNCTION-dev_release/v0.0.1-20261008: report-only rules feed the daily report
-    reportOnly: formData.reportOnly === true
+    reportOnly: formData.reportOnly === true,
+    // #AI-CODE-FUNCTION-dev_release/v0.0.2-20261012: opt out of the WARNING/INFO digest (send immediately)
+    ignoreDigest: formData.ignoreDigest === true
   }
   if (editingId.value) {
     await request.put(`/rules/${editingId.value}`, payload)

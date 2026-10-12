@@ -32,10 +32,12 @@ public class AlertIngestService {
     private final MessageBuilder messageBuilder;
     private final AlertMessageProducer alertMessageProducer;
     private final AlertMessageRecordService alertMessageRecordService;
+    private final WarningDigestGate warningDigestGate;
 
     public record IngestResult(boolean success, int status, String messageNo, Long recordId,
                                AlertRule rule, int recipientCount, String error,
-                               boolean silenced, boolean unmatched, boolean reportPending) {
+                               boolean silenced, boolean unmatched, boolean reportPending,
+                               boolean warningPending) {
     }
 
     public IngestResult ingest(Long apiKeyId, AlertType alertType, String rawPayload, String messageNo,
@@ -56,7 +58,7 @@ public class AlertIngestService {
                 AlertMessage msg = alertMessageRecordService.create(
                         apiKeyId, null, parsedAlert.getContext(), messageNo, rawPayload, null);
                 alertMessageRecordService.transitionToUnmatched(msg.getId(), reason);
-                return new IngestResult(true, 200, messageNo, msg.getId(), null, 0, reason, false, true, false);
+                return new IngestResult(true, 200, messageNo, msg.getId(), null, 0, reason, false, true, false, false);
             }
 
             // #AI-CODE-FUNCTION-dev_release/v0.0.2-20261010: the rule owns the alert level, so overwrite the severity
@@ -71,7 +73,7 @@ public class AlertIngestService {
                 AlertMessage msg = alertMessageRecordService.create(
                         apiKeyId, rule.getId(), parsedAlert.getContext(), messageNo, rawPayload, null);
                 alertMessageRecordService.transitionToSilenced(msg.getId(), rule.getId());
-                return new IngestResult(true, 200, messageNo, msg.getId(), rule, 0, null, true, false, false);
+                return new IngestResult(true, 200, messageNo, msg.getId(), rule, 0, null, true, false, false, false);
             }
 
             // #AI-CODE-FUNCTION-dev_release/v0.0.1-20260917: a report-only rule stores the alert without enqueueing —
@@ -82,7 +84,23 @@ public class AlertIngestService {
                 AlertMessage msg = alertMessageRecordService.create(apiKeyId, rule.getId(), parsedAlert.getContext(), messageNo, rawPayload, null);
                 msg.setMessageType("ALERT");
                 alertMessageRecordService.transitionToReportPending(msg.getId(), rule.getId());
-                return new IngestResult(true, 200, messageNo, msg.getId(), rule, 0, null, false, false, true);
+                return new IngestResult(true, 200, messageNo, msg.getId(), rule, 0, null, false, false, true, false);
+            }
+
+            // #AI-CODE-FUNCTION-dev_release/v0.0.2-20261012: while the digest is enabled, WARNING/INFO-severity
+            // alerts are parked as WARNING_PENDING and aggregated by the periodic digest job instead of being sent
+            // one-by-one. A rule with "忽略聚合" (ignoreDigest) opts out and keeps immediate delivery. Precedence:
+            // silenced > report-only (explicit per-rule intent) > warning digest.
+            boolean digestibleSeverity = rule.getSeverity() == AlertSeverity.WARNING
+                    || rule.getSeverity() == AlertSeverity.INFO;
+            if (digestibleSeverity && !Boolean.TRUE.equals(rule.getIgnoreDigest()) && warningDigestGate.enabled()) {
+                log.info("Digest is on, storing {} alert as WARNING_PENDING, rule={}, messageNo={}",
+                        rule.getSeverity(), rule.getId(), messageNo);
+                AlertMessage msg = alertMessageRecordService.create(
+                        apiKeyId, rule.getId(), parsedAlert.getContext(), messageNo, rawPayload, null);
+                msg.setMessageType("ALERT");
+                alertMessageRecordService.transitionToWarningPending(msg.getId(), rule.getId());
+                return new IngestResult(true, 200, messageNo, msg.getId(), rule, 0, null, false, false, false, true);
             }
 
             AlertMessagePayload mqPayload = messageBuilder.build(rule, parsedAlert, overrideChannel);
@@ -95,14 +113,14 @@ public class AlertIngestService {
             alertMessageProducer.send(mqPayload);
             alertMessageRecordService.transitionToGwSent(message.getId());
 
-            return new IngestResult(true, 200, messageNo, message.getId(), rule, mqPayload.getRecipients().size(), null, false, false, false);
+            return new IngestResult(true, 200, messageNo, message.getId(), rule, mqPayload.getRecipients().size(), null, false, false, false, false);
         } catch (Exception e) {
             log.error("Failed to handle {} alert, messageNo={}", alertType, messageNo, e);
             String reason = e.getMessage() != null ? e.getMessage() : e.getClass().getSimpleName();
             AlertMessage msg = alertMessageRecordService.create(
                     apiKeyId, null, Map.of("error", reason), messageNo, rawPayload, null);
             alertMessageRecordService.transitionToFailed(msg.getId(), MessageSubStatus.gw_failed, reason);
-            return new IngestResult(false, 500, messageNo, msg.getId(), null, 0, reason, false, false, false);
+            return new IngestResult(false, 500, messageNo, msg.getId(), null, 0, reason, false, false, false, false);
         }
     }
 

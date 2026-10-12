@@ -130,7 +130,9 @@ const SAMPLE_CONTEXT = {
 // #AI-CODE-FUNCTION-dev_release/v0.0.2-20261009: 日报模板上下文 = DailyReportJobExecutor.buildReportContext 的结构
 // （date/totalCount/byRule/bySeverity/byServiceType/alerts），供内置日报模板（TEXT/HTML）预览时填入真实字段
 const REPORT_SAMPLE_CONTEXT = {
+  title: '告警日报',
   date: new Date().toISOString().slice(0, 10),
+  generatedAt: new Date().toISOString().slice(0, 19).replace('T', ' '),
   totalCount: 3,
   byRule: [
     { ruleId: 1, ruleName: '核心服务告警', count: 2 },

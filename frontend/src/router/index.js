@@ -21,7 +21,8 @@ const routes = [
       { path: 'integration/notification', component: () => import('../views/NotificationGuide.vue') },
       { path: 'nodes', component: () => import('../views/Nodes.vue') },
       { path: 'test-message', component: () => import('../views/TestMessage.vue') },
-      { path: 'reports', component: () => import('../views/Reports.vue') }
+      { path: 'reports', component: () => import('../views/Reports.vue') },
+      { path: 'warning-digest', component: () => import('../views/WarningDigest.vue') }
     ]
   }
 ]
