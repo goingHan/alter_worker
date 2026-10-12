@@ -1,7 +1,5 @@
 package com.alertworker.common.mapper;
 
-import com.alertworker.common.dto.HourlyStatView;
-import com.alertworker.common.dto.TimingStatRow;
 import com.alertworker.common.entity.AlertMessage;
 import com.baomidou.mybatisplus.core.mapper.BaseMapper;
 import com.baomidou.mybatisplus.core.metadata.IPage;
@@ -17,24 +15,10 @@ import java.util.Map;
 @Mapper
 public interface AlertMessageMapper extends BaseMapper<AlertMessage> {
 
-    @Select("""
-            SELECT date_trunc('hour', m.received_at) AS hour,
-                   COUNT(DISTINCT m.id) AS total,
-                   COUNT(DISTINCT m.id) FILTER (WHERE m.status = 'FAILED') AS failed,
-                   COUNT(DISTINCT m.id) FILTER (WHERE m.status = 'SILENCED') AS silenced,
-                   COUNT(DISTINCT m.id) FILTER (WHERE m.status = 'UNMATCHED') AS unmatched,
-                   COUNT(DISTINCT d.id) AS dead_letters
-            FROM alert_message m
-            LEFT JOIN dead_letter_message d ON d.alert_message_id = m.id
-            WHERE m.received_at >= #{from} AND m.deleted = 0
-            GROUP BY 1
-            ORDER BY 1
-            """)
-    List<HourlyStatView> countHourlySince(@Param("from") LocalDateTime from);
-
     // #AI-CODE-FUNCTION-dev_release/v0.0.1-20260917: dropped messages for the dashboard — the alert was accepted but
     // dropped before any channel (silenced rule, or no matching rule), so there is no delivery status or channel name
     // to show. rule_name is only present for the silenced case: an unmatched alert has no rule by definition.
+    // NOTE: double-quoted aliases are portable — PostgreSQL treats them as identifiers, MySQL accepts them as aliases.
     @Select("""
             SELECT m.id, m.message_no AS "messageNo", m.alert_rule_id AS "alertRuleId",
                    m.status, m.payload, m.received_at AS "receivedAt", m.created_at AS "createdAt",
@@ -47,37 +31,8 @@ public interface AlertMessageMapper extends BaseMapper<AlertMessage> {
             """)
     List<Map<String, Object>> selectDroppedRecent(@Param("status") String status, @Param("limit") int limit);
 
-    @Select("""
-            SELECT AVG(EXTRACT(EPOCH FROM (gw_sent_at - received_at)) * 1000)
-                       FILTER (WHERE gw_sent_at IS NOT NULL) AS gw_avg,
-                   PERCENTILE_CONT(0.95) WITHIN GROUP (ORDER BY EXTRACT(EPOCH FROM (gw_sent_at - received_at)) * 1000)
-                       FILTER (WHERE gw_sent_at IS NOT NULL) AS gw_p95,
-                   MAX(EXTRACT(EPOCH FROM (gw_sent_at - received_at)) * 1000)
-                       FILTER (WHERE gw_sent_at IS NOT NULL) AS gw_max,
-                   AVG(EXTRACT(EPOCH FROM (worker_received_at - gw_sent_at)) * 1000)
-                       FILTER (WHERE worker_received_at IS NOT NULL AND gw_sent_at IS NOT NULL) AS mq_avg,
-                   PERCENTILE_CONT(0.95) WITHIN GROUP (ORDER BY EXTRACT(EPOCH FROM (worker_received_at - gw_sent_at)) * 1000)
-                       FILTER (WHERE worker_received_at IS NOT NULL AND gw_sent_at IS NOT NULL) AS mq_p95,
-                   MAX(EXTRACT(EPOCH FROM (worker_received_at - gw_sent_at)) * 1000)
-                       FILTER (WHERE worker_received_at IS NOT NULL AND gw_sent_at IS NOT NULL) AS mq_max,
-                   AVG(EXTRACT(EPOCH FROM (worker_sent_at - worker_received_at)) * 1000)
-                       FILTER (WHERE worker_sent_at IS NOT NULL AND worker_received_at IS NOT NULL) AS worker_avg,
-                   PERCENTILE_CONT(0.95) WITHIN GROUP (ORDER BY EXTRACT(EPOCH FROM (worker_sent_at - worker_received_at)) * 1000)
-                       FILTER (WHERE worker_sent_at IS NOT NULL AND worker_received_at IS NOT NULL) AS worker_p95,
-                   MAX(EXTRACT(EPOCH FROM (worker_sent_at - worker_received_at)) * 1000)
-                       FILTER (WHERE worker_sent_at IS NOT NULL AND worker_received_at IS NOT NULL) AS worker_max,
-                   AVG(EXTRACT(EPOCH FROM (finished_at - received_at)) * 1000)
-                       FILTER (WHERE finished_at IS NOT NULL) AS total_avg,
-                   PERCENTILE_CONT(0.95) WITHIN GROUP (ORDER BY EXTRACT(EPOCH FROM (finished_at - received_at)) * 1000)
-                       FILTER (WHERE finished_at IS NOT NULL) AS total_p95,
-                   MAX(EXTRACT(EPOCH FROM (finished_at - received_at)) * 1000)
-                       FILTER (WHERE finished_at IS NOT NULL) AS total_max,
-                   COUNT(*) AS count
-            FROM alert_message
-            WHERE received_at >= #{from} AND deleted = 0
-            """)
-    TimingStatRow timingStatsSince(@Param("from") LocalDateTime from);
-
+    // NOTE: LOWER(...) LIKE LOWER(...) is used instead of PostgreSQL's ILIKE so the query is portable across both
+    // supported databases (MySQL's default utf8mb4 collations are case-insensitive anyway).
     @Select("""
             <script>
             SELECT m.id, m.message_no AS "messageNo", m.alert_rule_id AS "alertRuleId", m.status,
@@ -91,7 +46,7 @@ public interface AlertMessageMapper extends BaseMapper<AlertMessage> {
             LEFT JOIN alert_rule r ON r.id = m.alert_rule_id
             WHERE m.deleted = 0
             <if test="messageNo != null and messageNo != ''">
-              AND m.message_no ILIKE CONCAT('%', #{messageNo}, '%')
+              AND LOWER(m.message_no) LIKE LOWER(CONCAT('%', #{messageNo}, '%'))
             </if>
             <if test="status != null and status != ''">
               AND m.status = #{status}
@@ -109,10 +64,10 @@ public interface AlertMessageMapper extends BaseMapper<AlertMessage> {
               AND NOT EXISTS (SELECT 1 FROM dead_letter_message d WHERE d.alert_message_id = m.id)
             </if>
             <if test="ruleName != null and ruleName != ''">
-              AND r.name ILIKE CONCAT('%', #{ruleName}, '%')
+              AND LOWER(r.name) LIKE LOWER(CONCAT('%', #{ruleName}, '%'))
             </if>
             <if test="channelName != null and channelName != ''">
-              AND m.channel_names ILIKE CONCAT('%', #{channelName}, '%')
+              AND LOWER(m.channel_names) LIKE LOWER(CONCAT('%', #{channelName}, '%'))
             </if>
             <if test="messageType != null and messageType != ''">
               AND m.message_type = #{messageType}
@@ -129,26 +84,4 @@ public interface AlertMessageMapper extends BaseMapper<AlertMessage> {
                                              @Param("ruleName") String ruleName,
                                              @Param("channelName") String channelName,
                                              @Param("messageType") String messageType);
-
-    /**
-     * #AI-CODE-FUNCTION-dev_release/v0.0.2-20261010: per-rule, per-hour alert counts of a window (used by the daily
-     * report's trend monitoring items). Rows are {@code {ruleId, hourOfDay, cnt}} for the requested rule ids and
-     * {@code [start, end)} window; hours without alerts are simply absent (caller fills zeros).
-     */
-    @Select("""
-            <script>
-            SELECT alert_rule_id AS "ruleId",
-                   CAST(EXTRACT(HOUR FROM created_at) AS int) AS "hourOfDay",
-                   COUNT(*) AS "cnt"
-            FROM alert_message
-            WHERE deleted = 0 AND message_type = 'ALERT' AND status &lt;&gt; 'SILENCED'
-              AND alert_rule_id IN
-              <foreach collection='ruleIds' item='rid' open='(' separator=',' close=')'>#{rid}</foreach>
-              AND created_at &gt;= #{start} AND created_at &lt; #{end}
-            GROUP BY alert_rule_id, EXTRACT(HOUR FROM created_at)
-            </script>
-            """)
-    List<Map<String, Object>> countHourlyByRule(@Param("ruleIds") List<Long> ruleIds,
-                                                @Param("start") LocalDateTime start,
-                                                @Param("end") LocalDateTime end);
 }

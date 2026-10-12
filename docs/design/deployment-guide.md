@@ -11,6 +11,7 @@ Deploy AlertWorker in test and production environments. Covers configuration, Do
 | `alertworker-worker` | 8082 | `/pw/alertworker/worker` | RabbitMQ consumer, template rendering, channel dispatch |
 | `frontend` | 3000 | — | Vue 3 management console |
 | PostgreSQL | 5432 | — | Primary database |
+| MySQL (alternative) | 3306 | — | Alternative database (dialect auto-detected from the JDBC URL) |
 | RabbitMQ | 5672 / 15672 | — | Message broker + management UI |
 | Nacos | 8848 / 9848 | — | Configuration center |
 
@@ -43,6 +44,8 @@ File: [`nacos-shared-config.yaml`](../../nacos-shared-config.yaml)
 ```yaml
 spring:
   datasource:
+    # PostgreSQL (default). For MySQL use: jdbc:mysql://127.0.0.1:3306/alertworker?useUnicode=true&characterEncoding=UTF-8&serverTimezone=Asia/Shanghai&useSSL=false&allowPublicKeyRetrieval=true
+    # with driver-class-name: com.mysql.cj.jdbc.Driver
     url: jdbc:postgresql://127.0.0.1:5432/alertworker
     username: alertworker
     password: alertworker
@@ -100,11 +103,11 @@ All three backend services run **Flyway** migrations on startup:
 spring:
   flyway:
     enabled: true
-    locations: classpath:db/migration
+    locations: classpath:db/migration/{vendor}
     baseline-on-migrate: true
 ```
 
-Migrations live in each module's `src/main/resources/db/migration/` directory. Because all services share the same database, only one service should run migrations in production — configure `spring.flyway.enabled: false` on the others.
+Migrations live in `alertworker-common/src/main/resources/db/migration/{vendor}/` (`postgresql` / `mysql`); Spring Boot resolves `{vendor}` from the active JDBC driver. Because all services share the same database, only one service should run migrations in production — configure `spring.flyway.enabled: false` on the others.
 
 ---
 

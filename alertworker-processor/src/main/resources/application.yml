@@ -15,7 +15,8 @@ spring:
         file-extension: yaml
   flyway:
     enabled: true
-    locations: classpath:db/migration
+    # #AI-CODE-CLASS-multi-db: Spring Boot resolves {vendor} to postgresql|mysql from the JDBC driver
+    locations: classpath:db/migration/{vendor}
     baseline-on-migrate: true
 
 server:

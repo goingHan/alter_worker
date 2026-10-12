@@ -1,5 +1,6 @@
 package com.alertworker.processor.scheduler;
 
+import com.alertworker.common.analytics.AlertMessageAnalytics;
 import com.alertworker.common.dto.AlertMessagePayload;
 import com.alertworker.common.dto.AlertRecipient;
 import com.alertworker.common.entity.AlertMessage;
@@ -96,6 +97,7 @@ public class DailyReportJobExecutor implements JobExecutor {
     private final DailyReportTrendRuleMapper dailyReportTrendRuleMapper;
     private final AlertRuleMapper alertRuleMapper;
     private final AlertMessageMapper alertMessageMapper;
+    private final AlertMessageAnalytics alertMessageAnalytics;
     private final AssigneeMapper assigneeMapper;
     private final MessageChannelMapper messageChannelMapper;
     private final MessageTemplateMapper messageTemplateMapper;
@@ -382,7 +384,7 @@ public class DailyReportJobExecutor implements JobExecutor {
         for (Long ruleId : trendRuleIds) {
             hourlyByRule.put(ruleId, new int[24]);
         }
-        for (Map<String, Object> cell : alertMessageMapper.countHourlyByRule(trendRuleIds, start, end)) {
+        for (Map<String, Object> cell : alertMessageAnalytics.countHourlyByRule(trendRuleIds, start, end)) {
             Long ruleId = toLong(cell.get("ruleId"));
             if (ruleId == null || !(cell.get("hourOfDay") instanceof Number hour) || !(cell.get("cnt") instanceof Number cnt)) {
                 continue;

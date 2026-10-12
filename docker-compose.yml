@@ -18,6 +18,26 @@ services:
       timeout: 5s
       retries: 5
 
+  # #AI-CODE-CLASS-multi-db: alternative datastore — point spring.datasource.url at jdbc:mysql://... to use it
+  mysql:
+    image: mysql:8.0
+    container_name: alertworker-mysql
+    command: --character-set-server=utf8mb4 --collation-server=utf8mb4_general_ci
+    environment:
+      MYSQL_DATABASE: alertworker
+      MYSQL_USER: alertworker
+      MYSQL_PASSWORD: alertworker
+      MYSQL_ROOT_PASSWORD: alertworker
+    ports:
+      - "3306:3306"
+    volumes:
+      - mysql_data:/var/lib/mysql
+    healthcheck:
+      test: [ "CMD", "mysqladmin", "ping", "-h", "127.0.0.1", "-ualertworker", "-palertworker" ]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
   rabbitmq:
     image: rabbitmq:3.12-management-alpine
     container_name: alertworker-rabbitmq
@@ -50,5 +70,6 @@ services:
 
 volumes:
   postgres_data:
+  mysql_data:
   rabbitmq_data:
   nacos_data:

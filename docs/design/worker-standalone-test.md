@@ -30,7 +30,7 @@ worker 启动时依赖三个外部组件，全部从 **Nacos** 拉取连接参�
 | 组件 | 地址 | 账号 | 用途 |
 |---|---|---|---|
 | Nacos 配置中心 | `172.168.1.249:28848` | `nacos` / `123.com` | 拉取 `shared-config.yaml`（datasource + rabbitmq 连接） |
-| PostgreSQL | `172.168.1.238:25432/alertworker` | `airflow` / `airflow` | 规则/模板/通道/告警记录/死信 |
+| PostgreSQL | `172.168.1.238:25432/alertworker` | `airflow` / `airflow` | 规则/模板/通道/告警记录/死信（也可换 MySQL，按 JDBC URL 自动识别） |
 | RabbitMQ | `172.168.1.238:5672` | `celery` / `123.com`（vhost **`alter_worker`**） | 消费报文 |
 
 > 测试钉钉通道时，需要一个可接收的 webhook 地址（本机 mock 或真实群机器人）；测试邮件通道时才需要可用的 SMTP。

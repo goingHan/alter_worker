@@ -1,5 +1,6 @@
 package com.alertworker.processor.scheduler;
 
+import com.alertworker.common.db.DatabaseDialect;
 import com.alertworker.common.entity.ScheduledJob;
 import com.alertworker.common.mapper.ScheduledJobMapper;
 import com.alertworker.common.scheduler.JobExecutor;
@@ -25,13 +26,14 @@ import java.util.List;
  * Data-processor scheduler tick. Runs every {@code alertworker.scheduler.tick-ms} (default 60s) and executes
  * due {@code scheduled_job} rows, dispatching each to the {@link JobExecutor} matching its {@code job_type}.
  *
- * <p>Single-instance guarantee: the tick acquires a PostgreSQL session-level advisory lock
- * ({@code pg_try_advisory_lock(hashtext('alertworker_scheduler')::bigint)}) on ONE dedicated connection and keeps
- * it open for the whole tick. A session-level lock dies with its session, so acquire + hold + release must happen
- * on the same connection — that is why the entire tick runs inside {@code JdbcTemplate.execute(ConnectionCallback)}
- * (the callback receives one connection that is only closed after the callback returns), instead of firing the
- * advisory-lock statement through the pooled {@code JdbcTemplate}. A second instance that cannot acquire the lock
- * returns immediately without running anything.
+ * <p>Single-instance guarantee: the tick acquires a session-level lock on ONE dedicated connection and keeps
+ * it open for the whole tick. The exact statement is provided by the {@link DatabaseDialect} — PostgreSQL uses
+ * {@code pg_try_advisory_lock(hashtext('alertworker_scheduler')::bigint)}, MySQL uses
+ * {@code GET_LOCK('alertworker_scheduler', 0)}. A session-level lock dies with its session, so acquire + hold +
+ * release must happen on the same connection — that is why the entire tick runs inside
+ * {@code JdbcTemplate.execute(ConnectionCallback)} (the callback receives one connection that is only closed after
+ * the callback returns), instead of firing the lock statement through the pooled {@code JdbcTemplate}. A second
+ * instance that cannot acquire the lock returns immediately without running anything.
  */
 @Component
 @Slf4j
@@ -39,14 +41,11 @@ import java.util.List;
 public class ScheduledJobService {
 
     private static final ZoneId ZONE = ZoneId.of("Asia/Shanghai");
-    private static final String LOCK_SQL =
-            "SELECT pg_try_advisory_lock(hashtext('alertworker_scheduler')::bigint)";
-    private static final String UNLOCK_SQL =
-            "SELECT pg_advisory_unlock(hashtext('alertworker_scheduler')::bigint)";
 
     private final JdbcTemplate jdbcTemplate;
     private final ScheduledJobMapper scheduledJobMapper;
     private final List<JobExecutor> jobExecutors;
+    private final DatabaseDialect databaseDialect;
 
     @Scheduled(fixedDelayString = "${alertworker.scheduler.tick-ms:60000}")
     public void tick() {
@@ -143,20 +142,20 @@ public class ScheduledJobService {
 
     private boolean tryAcquireLock(Connection connection) {
         try (Statement statement = connection.createStatement();
-             ResultSet rs = statement.executeQuery(LOCK_SQL)) {
+             ResultSet rs = statement.executeQuery(databaseDialect.advisoryLockSql())) {
             return rs.next() && rs.getBoolean(1);
         } catch (SQLException e) {
-            log.error("Failed to run pg_try_advisory_lock", e);
+            log.error("Failed to acquire the scheduler session lock", e);
             return false;
         }
     }
 
     private void releaseLock(Connection connection) {
         try (Statement statement = connection.createStatement();
-             ResultSet rs = statement.executeQuery(UNLOCK_SQL)) {
+             ResultSet rs = statement.executeQuery(databaseDialect.advisoryUnlockSql())) {
             rs.next();
         } catch (SQLException e) {
-            log.error("Failed to run pg_advisory_unlock", e);
+            log.error("Failed to release the scheduler session lock", e);
         }
     }
 }

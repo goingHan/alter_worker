@@ -17,7 +17,7 @@ spring:
   # #AI-CODE-CLASS-dev_release/v0.0.1-20260804: datasource moved to nacos shared-config.yaml
   flyway:
     enabled: true
-    locations: classpath:db/migration
+    locations: classpath:db/migration/{vendor}
     baseline-on-migrate: true
 
 server:

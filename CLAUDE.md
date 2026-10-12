@@ -26,7 +26,7 @@ AlertWorker is a transfer station that accepts alert messages and transfers them
 
 ##### backend
 - java + springboot + mybatis plus
-- use postgres databases
+- use postgres or mysql databases (dialect auto-detected from the JDBC URL; see `com.alertworker.common.db`)
 - use the rabbitmq message queue
 - use **nacos** as configuration center
 - template engine: **Jinjava**

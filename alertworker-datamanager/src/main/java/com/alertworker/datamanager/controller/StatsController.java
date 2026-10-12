@@ -1,5 +1,6 @@
 package com.alertworker.datamanager.controller;
 
+import com.alertworker.common.analytics.AlertMessageAnalytics;
 import com.alertworker.common.dto.HourlyStatView;
 import com.alertworker.common.dto.TimingStatRow;
 import com.alertworker.common.mapper.AlertMessageMapper;
@@ -29,6 +30,7 @@ import java.util.Map;
 public class StatsController {
 
     private final AlertMessageMapper alertMessageMapper;
+    private final AlertMessageAnalytics alertMessageAnalytics;
     private final DeadLetterMessageMapper deadLetterMessageMapper;
     private final AlertRuleMapper alertRuleMapper;
 
@@ -37,7 +39,7 @@ public class StatsController {
         // #AI-CODE-FUNCTION-dev_release/v0.0.1-20260916: 24 buckets ending at the current hour so in-progress hours are not dropped
         LocalDateTime end = LocalDateTime.now().withMinute(0).withSecond(0).withNano(0);
         LocalDateTime from = end.minusHours(23);
-        List<HourlyStatView> rows = alertMessageMapper.countHourlySince(from);
+        List<HourlyStatView> rows = alertMessageAnalytics.countHourlySince(from);
 
         Map<String, HourlyStatView> byHour = new HashMap<>();
         for (HourlyStatView row : rows) {
@@ -65,7 +67,7 @@ public class StatsController {
     @GetMapping("/timing")
     public Map<String, Object> timing() {
         LocalDateTime from = LocalDateTime.now().minusHours(24);
-        TimingStatRow row = alertMessageMapper.timingStatsSince(from);
+        TimingStatRow row = alertMessageAnalytics.timingStatsSince(from);
         if (row == null) {
             return Map.of();
         }

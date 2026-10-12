@@ -18,6 +18,7 @@
 | gateway | 8081 | `/pw/alertworker/gw` | 告警接入（Prometheus/Alertmanager 对接）、死信重试、通道测试 |
 | worker | 8082 | `/pw/alertworker/worker` | MQ 消费、模板渲染、钉钉/邮件投递 |
 | PostgreSQL | 5432 | — | 主库（schema 由 datamanager 的 Flyway 自动创建） |
+| MySQL（可选） | 3306 | — | 备选主库（按 JDBC URL 自动识别数据库类型） |
 | RabbitMQ | 5672 / 15672 | — | 消息队列（拓扑由应用自动声明） |
 | Nacos | 8848 | — | 配置中心（**应用启动硬依赖**） |
 

@@ -6,7 +6,8 @@
 
 | Service | Version | Role | Connection |
 |---|---|---|---|
-| **PostgreSQL** | 15 | Primary data store | JDBC (port 5432) |
+| **PostgreSQL** | 15 | Primary data store (or MySQL 8) | JDBC (port 5432) |
+| **MySQL** | 8.0 | Alternative data store (dialect auto-detected from JDBC URL) | JDBC (port 3306) |
 | **RabbitMQ** | 3.12 | Message queue + DLQ | AMQP (port 5672) / HTTP management (15672) |
 | **Nacos** | 2.3 | Configuration center | HTTP (port 8848) / gRPC (9848) |
 
@@ -27,7 +28,7 @@
 | Jinjava | 2.7.2 | Worker (template rendering) |
 | Flyway | 10.11 | All backend modules (DB migrations) |
 | Lombok | latest | All backend modules |
-| PostgreSQL JDBC Driver | managed | All backend modules |
+| PostgreSQL JDBC Driver + MySQL Connector/J | managed | All backend modules (both packaged; active one chosen by JDBC URL) |
 
 ## Frontend Dependencies (npm)
 
@@ -58,6 +59,7 @@ alertworker-common
 | 8081 | Gateway | HTTP |
 | 8082 | Worker | HTTP |
 | 5432 | PostgreSQL | TCP |
+| 3306 | MySQL | TCP |
 | 5672 | RabbitMQ | AMQP |
 | 15672 | RabbitMQ Management | HTTP |
 | 8848 | Nacos API | HTTP |

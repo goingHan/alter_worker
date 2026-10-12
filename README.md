@@ -31,7 +31,7 @@ docker-compose up -d
 ```
 
 This starts:
-- PostgreSQL on `localhost:5432`
+- PostgreSQL on `localhost:5432` (and a MySQL 8 alternative on `localhost:3306` — point `spring.datasource.url` at `jdbc:mysql://...` to use it)
 - RabbitMQ on `localhost:5672` (Management UI on `localhost:15672`)
 - Nacos on `localhost:8848`
 

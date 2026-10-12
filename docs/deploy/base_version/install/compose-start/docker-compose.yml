@@ -8,7 +8,7 @@
 #
 # 内部全套启动：
 #   docker compose --profile db --profile mq --profile nacos --profile app up -d
-# 使用外部数据库 / MQ / Nacos 时（在 .env 中改 DB_HOST / RABBITMQ_HOST / NACOS_SERVER_ADDR）：
+# 使用外部数据库 / MQ / Nacos 时（在 .env 中改 DB_JDBC_URL / RABBITMQ_HOST / NACOS_SERVER_ADDR）：
 #   docker compose --profile app up -d
 #
 # 需要 Docker Compose v2.20+（depends_on.required 语法）
@@ -21,6 +21,7 @@ networks:
 
 volumes:
   postgres_data:
+  mysql_data:
   rabbitmq_data:
   nacos_data:
 
@@ -29,9 +30,10 @@ x-backend-env: &backend-env
   NACOS_NAMESPACE: ${NACOS_NAMESPACE:-business_test}
   NACOS_USERNAME: ${NACOS_USERNAME:-nacos}
   NACOS_PASSWORD: ${NACOS_PASSWORD:-123.com}
-  SPRING_DATASOURCE_URL: jdbc:postgresql://${DB_HOST:-postgres}:${DB_PORT:-5432}/${POSTGRES_DB:-alertworker}
-  SPRING_DATASOURCE_USERNAME: ${POSTGRES_USER:-alertworker}
-  SPRING_DATASOURCE_PASSWORD: ${POSTGRES_PASSWORD:-alertworker}
+  # #AI-CODE-CLASS-multi-db: JDBC URL 前缀决定数据库类型（jdbc:postgresql: / jdbc:mysql:），驱动由 Spring Boot 自动匹配
+  SPRING_DATASOURCE_URL: ${DB_JDBC_URL:-jdbc:postgresql://postgres:5432/alertworker}
+  SPRING_DATASOURCE_USERNAME: ${DB_USERNAME:-alertworker}
+  SPRING_DATASOURCE_PASSWORD: ${DB_PASSWORD:-alertworker}
   SPRING_RABBITMQ_HOST: ${RABBITMQ_HOST:-rabbitmq}
   SPRING_RABBITMQ_PORT: ${RABBITMQ_PORT:-5672}
   SPRING_RABBITMQ_USERNAME: ${RABBITMQ_USERNAME:-alertworker}
@@ -60,6 +62,31 @@ services:
       interval: 10s
       timeout: 5s
       retries: 10
+    restart: unless-stopped
+
+  # ---------- 内置 MySQL（与 postgres 二选一；profile: mysqldb）----------
+  mysql:
+    image: mysql:8.0
+    container_name: alertworker-mysql
+    profiles: ["mysqldb"]
+    command: --character-set-server=utf8mb4 --collation-server=utf8mb4_general_ci
+    environment:
+      MYSQL_DATABASE: ${MYSQL_DATABASE:-alertworker}
+      MYSQL_USER: ${MYSQL_USER:-alertworker}
+      MYSQL_PASSWORD: ${MYSQL_PASSWORD:-alertworker}
+      MYSQL_ROOT_PASSWORD: ${MYSQL_ROOT_PASSWORD:-alertworker}
+      TZ: ${TZ:-Asia/Shanghai}
+    ports:
+      - "${MYSQL_PORT:-3306}:3306"
+    volumes:
+      - mysql_data:/var/lib/mysql
+    networks: [alertworker-net]
+    healthcheck:
+      test: ["CMD", "mysqladmin", "ping", "-h", "127.0.0.1", "-u${MYSQL_USER:-alertworker}", "-p${MYSQL_PASSWORD:-alertworker}"]
+      interval: 10s
+      timeout: 5s
+      retries: 10
+      start_period: 30s
     restart: unless-stopped
 
   # ---------- 内置 RabbitMQ ----------
@@ -125,11 +152,10 @@ services:
       NACOS_USERNAME: ${NACOS_USERNAME:-nacos}
       NACOS_PASSWORD: ${NACOS_PASSWORD:-123.com}
       # 发布进 shared-config.yaml 的业务配置
-      DB_HOST: ${DB_HOST:-postgres}
-      DB_PORT: ${DB_PORT:-5432}
-      POSTGRES_DB: ${POSTGRES_DB:-alertworker}
-      POSTGRES_USER: ${POSTGRES_USER:-alertworker}
-      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-alertworker}
+      DB_JDBC_URL: ${DB_JDBC_URL:-jdbc:postgresql://postgres:5432/alertworker}
+      DB_DRIVER: ${DB_DRIVER:-org.postgresql.Driver}
+      DB_USERNAME: ${DB_USERNAME:-alertworker}
+      DB_PASSWORD: ${DB_PASSWORD:-alertworker}
       RABBITMQ_HOST: ${RABBITMQ_HOST:-rabbitmq}
       RABBITMQ_PORT: ${RABBITMQ_PORT:-5672}
       RABBITMQ_USERNAME: ${RABBITMQ_USERNAME:-alertworker}
@@ -172,11 +198,16 @@ services:
             | sed -n 's/.*"accessToken":"\([^"]*\)".*/\1/p' || true)
         fi
         echo "[nacos-init] rendering shared-config.yaml from template ..."
-        sed -e "s|@DB_HOST@|$${DB_HOST}|g" \
-            -e "s|@DB_PORT@|$${DB_PORT}|g" \
-            -e "s|@POSTGRES_DB@|$${POSTGRES_DB}|g" \
-            -e "s|@POSTGRES_USER@|$${POSTGRES_USER}|g" \
-            -e "s|@POSTGRES_PASSWORD@|$${POSTGRES_PASSWORD}|g" \
+        # escape sed replacement metacharacters (JDBC URLs contain &)
+        esc() { printf '%s' "$1" | sed 's/[&|\\]/\\&/g'; }
+        DB_JDBC_URL_ESC=$$(esc "$${DB_JDBC_URL}")
+        DB_DRIVER_ESC=$$(esc "$${DB_DRIVER}")
+        DB_USERNAME_ESC=$$(esc "$${DB_USERNAME}")
+        DB_PASSWORD_ESC=$$(esc "$${DB_PASSWORD}")
+        sed -e "s|@DB_JDBC_URL@|$${DB_JDBC_URL_ESC}|g" \
+            -e "s|@DB_DRIVER@|$${DB_DRIVER_ESC}|g" \
+            -e "s|@DB_USERNAME@|$${DB_USERNAME_ESC}|g" \
+            -e "s|@DB_PASSWORD@|$${DB_PASSWORD_ESC}|g" \
             -e "s|@RABBITMQ_HOST@|$${RABBITMQ_HOST}|g" \
             -e "s|@RABBITMQ_PORT@|$${RABBITMQ_PORT}|g" \
             -e "s|@RABBITMQ_USERNAME@|$${RABBITMQ_USERNAME}|g" \
@@ -352,18 +383,18 @@ services:
         required: false
     restart: unless-stopped
 
-  # 一次性容器：等 schema（Flyway）就绪后注入幂等种子数据
+  # 一次性容器：等 schema（Flyway）就绪后注入幂等种子数据（内置 PostgreSQL，profile: db）
   db-seed:
     image: postgres:15-alpine
     container_name: alertworker-db-seed
-    profiles: ["app"]
+    profiles: ["db"]
     depends_on:
       datamanager:
         condition: service_started
         required: false
     environment:
-      PGHOST: ${DB_HOST:-postgres}
-      PGPORT: ${DB_PORT:-5432}
+      PGHOST: postgres
+      PGPORT: 5432
       PGDATABASE: ${POSTGRES_DB:-alertworker}
       PGUSER: ${POSTGRES_USER:-alertworker}
       PGPASSWORD: ${POSTGRES_PASSWORD:-alertworker}
@@ -382,6 +413,43 @@ services:
         echo "[db-seed] seeding data ..."
         psql -v ON_ERROR_STOP=1 -f /init/db-seed.sql -v seed_api_key="$${SEED_API_KEY}"
         echo "[db-seed] done."
+    volumes:
+      - ./init:/init:ro
+    networks: [alertworker-net]
+    restart: "no"
+
+  # 一次性容器：等 schema（Flyway）就绪后注入幂等种子数据（内置 MySQL，profile: mysqldb）
+  db-seed-mysql:
+    image: mysql:8.0
+    container_name: alertworker-db-seed-mysql
+    profiles: ["mysqldb"]
+    depends_on:
+      datamanager:
+        condition: service_started
+        required: false
+    environment:
+      MYSQL_HOST: mysql
+      MYSQL_PORT: 3306
+      MYSQL_DATABASE: ${MYSQL_DATABASE:-alertworker}
+      MYSQL_USER: ${MYSQL_USER:-alertworker}
+      MYSQL_PASSWORD: ${MYSQL_PASSWORD:-alertworker}
+      SEED_API_KEY: ${SEED_API_KEY:-alertworker-test-key}
+    entrypoint:
+      - /bin/sh
+      - -c
+      - |
+        set -e
+        echo "[db-seed-mysql] waiting for schema (flyway migrations) ..."
+        i=0
+        until mysql --default-character-set=utf8mb4 -h "$${MYSQL_HOST}" -P "$${MYSQL_PORT}" -u"$${MYSQL_USER}" -p"$${MYSQL_PASSWORD}" "$${MYSQL_DATABASE}" -N -e "SELECT 1 FROM information_schema.tables WHERE table_schema=DATABASE() AND table_name='message_template'" 2>/dev/null | grep -q 1; do
+          i=$$((i+1)); [ $$i -gt 60 ] && echo "[db-seed-mysql] schema not ready, abort" && exit 1
+          sleep 5
+        done
+        echo "[db-seed-mysql] seeding data ..."
+        SEED_API_KEY_ESC=$$(printf '%s' "$${SEED_API_KEY}" | sed 's/[&|\\]/\\&/g')
+        sed "s|@SEED_API_KEY@|$${SEED_API_KEY_ESC}|g" /init/db-seed.mysql.sql > /tmp/db-seed.mysql.sql
+        mysql --default-character-set=utf8mb4 -h "$${MYSQL_HOST}" -P "$${MYSQL_PORT}" -u"$${MYSQL_USER}" -p"$${MYSQL_PASSWORD}" "$${MYSQL_DATABASE}" < /tmp/db-seed.mysql.sql
+        echo "[db-seed-mysql] done."
     volumes:
       - ./init:/init:ro
     networks: [alertworker-net]

@@ -5,10 +5,15 @@
 
 spring:
   datasource:
+    # #AI-CODE-CLASS-multi-db: 应用按 JDBC URL 前缀自动识别 PostgreSQL / MySQL。
+    # PostgreSQL（默认）:
     url: jdbc:postgresql://172.168.1.238:25432/alertworker
     username: airflow
     password: airflow
     driver-class-name: org.postgresql.Driver
+    # MySQL（示例，切换时替换上面 url/driver-class-name）:
+    # url: jdbc:mysql://172.168.1.238:3306/alertworker?useUnicode=true&characterEncoding=UTF-8&serverTimezone=Asia/Shanghai&useSSL=false&allowPublicKeyRetrieval=true
+    # driver-class-name: com.mysql.cj.jdbc.Driver
   mail:
     host: smtp.example.com
     port: 587

@@ -15,7 +15,7 @@ spring:
         file-extension: yaml
   flyway:
     enabled: false
-    locations: classpath:db/migration
+    locations: classpath:db/migration/{vendor}
     baseline-on-migrate: true
 
 server:
