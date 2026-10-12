@@ -418,7 +418,7 @@ The payload **must** be a valid JSON object with the following requirements:
 
 #### List Rules
 - **GET** `/pw/alertworker/dm/api/v1/rules?current=1&size=20`
-- 过滤参数：`name`（模糊）、`alertType`（`PROMETHEUS`/`JSON`）、`silenced`（`true`/`false`，2026-09-17 起）
+- 过滤参数：`name`（模糊）、`alertType`（`PROMETHEUS`/`JSON`）、`severity`（`INFO`/`WARNING`/`CRITICAL`，2026-10-12 起）、`silenced`（`true`/`false`，2026-09-17 起）
 
 #### Get Rule
 - **GET** `/pw/alertworker/dm/api/v1/rules/{id}`
@@ -527,6 +527,8 @@ The payload **must** be a valid JSON object with the following requirements:
 
 #### Alert History
 - **GET** `/pw/alertworker/dm/api/v1/alerts/history?current=1&size=20`
+- 过滤参数：`messageNo`（模糊）、`status`、`messageType`（`ALERT`/`TEST`/`REPORT`）、`severity`（`INFO`/`WARNING`/`CRITICAL`，按规则级别过滤，2026-10-12 起）、`startDate`、`endDate`、`inDeadLetter`、`ruleName`（模糊）、`channelName`（模糊）
+- 每条记录含 `severity`（取自命中的 `alert_rule.severity`；测试/日报等无规则行为空）
 - **Response**: `Page<AlertMessage>`
 
 #### Alert Detail
@@ -703,11 +705,13 @@ eventSource.addEventListener('alerts', (e) => {
 - **GET** `/pw/alertworker/dm/api/v1/stats/silenced?size=10`（`size` 上限 100）
 - **Response**: `[{id, messageNo, alertRuleId, ruleName, status, summary, fullContent, receivedAt, createdAt}]`
 - 按 `created_at` 倒序；`summary` 为报文摘要（≤200 字符），完整报文在 `fullContent`
+- 仅返回最近 24 小时（`received_at`）被静默丢弃的记录，与仪表盘卡片计数窗口一致
 
 #### Recent Unmatched Messages（未匹配告警，2026-09-17 起）
 - **GET** `/pw/alertworker/dm/api/v1/stats/unmatched?size=10`（`size` 上限 100）
 - **Response**: 同上结构，但 `alertRuleId` / `ruleName` 恒为 `null`（未匹配就是没有规则）
 - 用途：仪表盘「未匹配告警」面板 —— 出现即说明有告警没人接，通常是缺规则或匹配 key/值写错
+- 仅返回最近 24 小时（`received_at`）未匹配丢弃的记录，与仪表盘卡片计数窗口一致
 
 #### Timing Stats
 - **GET** `/pw/alertworker/dm/api/v1/stats/timing`

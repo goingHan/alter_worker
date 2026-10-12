@@ -21,6 +21,12 @@
           <Option value="TEST">测试</Option>
           <Option value="REPORT">日报</Option>
         </Select>
+        <!-- #AI-CODE-FUNCTION-dev_release/v0.0.2-20261012: filter by the rule-owned alert level -->
+        <Select v-model="filters.severity" clearable filterable placeholder="告警级别" class="filter-item">
+          <Option value="INFO">INFO</Option>
+          <Option value="WARNING">WARNING</Option>
+          <Option value="CRITICAL">CRITICAL</Option>
+        </Select>
         <DatePicker :value="filters.startDate" type="datetime" format="yyyy-MM-dd HH:mm:ss" placeholder="开始时间" clearable class="filter-item date-item" @on-change="setStartDate" />
         <DatePicker :value="filters.endDate" type="datetime" format="yyyy-MM-dd HH:mm:ss" placeholder="结束时间" clearable class="filter-item date-item" @on-change="setEndDate" />
         <Select v-model="filters.inDeadLetter" clearable filterable placeholder="死信队列" class="filter-item">
@@ -156,6 +162,7 @@ const filters = reactive({
   messageNo: '',
   status: '',
   messageType: '',
+  severity: '',
   startDate: '',
   endDate: '',
   inDeadLetter: '',
@@ -179,6 +186,9 @@ const statusOptions = [
   { value: 'WARNING_PENDING', label: '已入库待汇总' }
 ]
 
+// #AI-CODE-FUNCTION-dev_release/v0.0.2-20261012: colour the level tag the same way the rules page does
+const severityColor = (s) => (s === 'CRITICAL' ? 'red' : s === 'INFO' ? 'blue' : 'orange')
+
 const columns = [
   { title: '告警 ID', key: 'messageNo', width: 180 },
   // #AI-CODE-FUNCTION-dev_release/v0.0.1-20261008: unified type column (ALERT / TEST / REPORT)
@@ -197,6 +207,13 @@ const columns = [
     }
   },
   { title: '内容', slot: 'content', minWidth: 600 },
+  // #AI-CODE-FUNCTION-dev_release/v0.0.2-20261012: the level is inherited from the matched rule
+  {
+    title: '级别', key: 'severity', width: 100, align: 'center',
+    render: (h, p) => p.row.severity
+      ? h(Tag, { props: { color: severityColor(p.row.severity) } }, () => p.row.severity)
+      : h('span', { class: 'dim' }, '—')
+  },
   { title: '规则名', key: 'ruleName', width: 140, render: (h, p) => h('span', {}, p.row.ruleName || '--') },
   { title: '渠道', key: 'channelNames', width: 160, render: (h, p) => h('span', { class: 'channel-cell' }, p.row.channelNames || '--') },
   {
@@ -240,6 +257,7 @@ const buildParams = () => ({
   status: filters.status || undefined,
   // #AI-CODE-FUNCTION-dev_release/v0.0.1-20261008: empty string = no type filter
   messageType: filters.messageType || undefined,
+  severity: filters.severity || undefined,
   startDate: filters.startDate || undefined,
   endDate: filters.endDate || undefined,
   inDeadLetter: filters.inDeadLetter === 'yes' ? true : filters.inDeadLetter === 'no' ? false : undefined,
@@ -278,6 +296,7 @@ const reset = () => {
   filters.messageNo = ''
   filters.status = ''
   filters.messageType = ''
+  filters.severity = ''
   filters.startDate = ''
   filters.endDate = ''
   filters.inDeadLetter = ''

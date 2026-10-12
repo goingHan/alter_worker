@@ -18,6 +18,8 @@ public interface AlertMessageMapper extends BaseMapper<AlertMessage> {
     // #AI-CODE-FUNCTION-dev_release/v0.0.1-20260917: dropped messages for the dashboard — the alert was accepted but
     // dropped before any channel (silenced rule, or no matching rule), so there is no delivery status or channel name
     // to show. rule_name is only present for the silenced case: an unmatched alert has no rule by definition.
+    // The panel is labelled "last 24h" and the card counts use the same window, so the list is filtered on
+    // received_at (the column every overview/24h stat keys on) to keep the rows and the count in agreement.
     // NOTE: double-quoted aliases are portable — PostgreSQL treats them as identifiers, MySQL accepts them as aliases.
     @Select("""
             SELECT m.id, m.message_no AS "messageNo", m.alert_rule_id AS "alertRuleId",
@@ -25,11 +27,13 @@ public interface AlertMessageMapper extends BaseMapper<AlertMessage> {
                    r.name AS "ruleName"
             FROM alert_message m
             LEFT JOIN alert_rule r ON r.id = m.alert_rule_id
-            WHERE m.deleted = 0 AND m.status = #{status}
+            WHERE m.deleted = 0 AND m.status = #{status} AND m.received_at >= #{from}
             ORDER BY m.created_at DESC
             LIMIT #{limit}
             """)
-    List<Map<String, Object>> selectDroppedRecent(@Param("status") String status, @Param("limit") int limit);
+    List<Map<String, Object>> selectDroppedRecent(@Param("status") String status,
+                                                  @Param("from") LocalDateTime from,
+                                                  @Param("limit") int limit);
 
     // NOTE: LOWER(...) LIKE LOWER(...) is used instead of PostgreSQL's ILIKE so the query is portable across both
     // supported databases (MySQL's default utf8mb4 collations are case-insensitive anyway).
@@ -40,6 +44,7 @@ public interface AlertMessageMapper extends BaseMapper<AlertMessage> {
                    m.received_at AS "receivedAt", m.created_at AS "createdAt", m.payload,
                    m.message_type AS "messageType",
                    r.name AS "ruleName",
+                   r.severity AS "severity",
                    m.channel_names AS "channelNames",
                    EXISTS (SELECT 1 FROM dead_letter_message d WHERE d.alert_message_id = m.id) AS "inDeadLetter"
             FROM alert_message m
@@ -50,6 +55,9 @@ public interface AlertMessageMapper extends BaseMapper<AlertMessage> {
             </if>
             <if test="status != null and status != ''">
               AND m.status = #{status}
+            </if>
+            <if test="severity != null and severity != ''">
+              AND r.severity = #{severity}
             </if>
             <if test="start != null">
               AND m.created_at &gt;= #{start}
@@ -78,6 +86,7 @@ public interface AlertMessageMapper extends BaseMapper<AlertMessage> {
     IPage<Map<String, Object>> searchHistory(Page<Map<String, Object>> page,
                                              @Param("messageNo") String messageNo,
                                              @Param("status") String status,
+                                             @Param("severity") String severity,
                                              @Param("start") LocalDateTime start,
                                              @Param("end") LocalDateTime end,
                                              @Param("inDeadLetter") Boolean inDeadLetter,

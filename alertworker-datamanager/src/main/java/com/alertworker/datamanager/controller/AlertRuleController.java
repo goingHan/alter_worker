@@ -7,6 +7,7 @@ import com.alertworker.common.entity.RuleGroup;
 import com.alertworker.common.entity.RuleAssignee;
 import com.alertworker.common.dto.RuleChannelView;
 import com.alertworker.common.dto.RuleGroupNameView;
+import com.alertworker.common.enums.AlertSeverity;
 import com.alertworker.common.enums.AlertType;
 import com.alertworker.common.mapper.AlertRuleChannelMapper;
 import com.alertworker.common.mapper.AlertRuleMapper;
@@ -43,6 +44,7 @@ public class AlertRuleController {
                                 @RequestParam(defaultValue = "20") int size,
                                 @RequestParam(required = false) String name,
                                 @RequestParam(required = false) AlertType alertType,
+                                @RequestParam(required = false) AlertSeverity severity,
                                 @RequestParam(required = false) Boolean silenced) {
         LambdaQueryWrapper<AlertRule> wrapper = new LambdaQueryWrapper<>();
         if (name != null && !name.isBlank()) {
@@ -50,6 +52,10 @@ public class AlertRuleController {
         }
         if (alertType != null) {
             wrapper.eq(AlertRule::getAlertType, alertType);
+        }
+        // #AI-CODE-FUNCTION-dev_release/v0.0.2-20261012: rule list can be filtered by the alert level the rule owns
+        if (severity != null) {
+            wrapper.eq(AlertRule::getSeverity, severity);
         }
         // #AI-CODE-FUNCTION-dev_release/v0.0.1-20260917: silence filter for the rule list
         if (silenced != null) {

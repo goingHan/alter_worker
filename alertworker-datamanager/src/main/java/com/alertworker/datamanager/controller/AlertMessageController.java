@@ -2,6 +2,7 @@ package com.alertworker.datamanager.controller;
 
 import com.alertworker.common.entity.AlertMessage;
 import com.alertworker.common.entity.DeadLetterMessage;
+import com.alertworker.common.enums.AlertSeverity;
 import com.alertworker.common.enums.MessageStatus;
 import com.alertworker.common.mapper.AlertMessageMapper;
 import com.alertworker.common.mapper.DeadLetterMessageMapper;
@@ -84,6 +85,9 @@ public class AlertMessageController {
                                               @RequestParam(required = false) Boolean inDeadLetter,
                                               @RequestParam(required = false) String ruleName,
                                               @RequestParam(required = false) String channelName,
+                                              // #AI-CODE-FUNCTION-dev_release/v0.0.2-20261012: severity filter — the level
+                                              // is owned by the rule, so it filters on the joined alert_rule.severity
+                                              @RequestParam(required = false) AlertSeverity severity,
                                               // #AI-CODE-FUNCTION-dev_release/v0.0.1-20261008: unified history type
                                               // filter (ALERT / TEST / REPORT)
                                               @RequestParam(required = false) String messageType) {
@@ -91,7 +95,8 @@ public class AlertMessageController {
         LocalDateTime end = parseEnd(endDate);
         return alertMessageMapper.searchHistory(
                 new Page<>(current, size),
-                messageNo, status, start, end, inDeadLetter, ruleName, channelName, messageType);
+                messageNo, status, severity == null ? null : severity.name(),
+                start, end, inDeadLetter, ruleName, channelName, messageType);
     }
 
     private LocalDateTime parseStart(String value) {

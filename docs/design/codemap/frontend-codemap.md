@@ -107,6 +107,7 @@ SSE 的 token 从 localStorage 读取（`History.vue:164`），不走 axios。
 | SSE 连接（token 来自 localStorage） | — | `connectSse` `163-189`；重连 `handleReconnect` `191-201` |
 
 - 接口：`GET /alerts/history`、`GET /alerts/history/{id}`、`GET /api/v1/sse/alerts?token=...`
+- filter-bar 过滤项（`filters`）：`messageNo` / `status` / `messageType` / `severity`（2026-10-12 起，映射 `GET /alerts/history?severity=INFO|WARNING|CRITICAL`，按规则级别过滤）/ 起止时间 / `inDeadLetter` / `ruleName` / `channelName`；表格「级别」列渲染 `row.severity`（颜色同规则页 `severityColor`）
 
 ### 4.5 其余 CRUD 页面（API Keys / Channels / Assignees / Groups / Templates / Rules / Failed）
 
@@ -163,7 +164,7 @@ SSE 的 token 从 localStorage 读取（`History.vue:164`），不走 axios。
 |---|---|---|
 | 规则开关 UI | `Rules.vue` 表格「静默」列 + 行内「静默/恢复发送」按钮（`toggleSilence`，带二次确认） | 走 `PUT /rules/{id}/silence`，与普通编辑解耦 |
 | 规则表单 | `Rules.vue` 编辑弹窗「静默」`i-switch`（`formData.silenced`） | 随规则保存提交 `silenced` |
-| 规则筛选 | `Rules.vue` filter-bar「静默状态」（`filters.silenced`） | 映射到 `GET /rules?silenced=true/false` |
+| 规则筛选 | `Rules.vue` filter-bar「静默状态」（`filters.silenced`）/「告警级别」（`filters.severity`） | 映射到 `GET /rules?silenced=true/false`、`GET /rules?severity=INFO|WARNING|CRITICAL` |
 | 仪表盘 | `Dashboard.vue`「已静默」统计卡片 + 「已静默消息」面板 | `/stats/overview.silenced`、`/stats/silenced`；「管理规则静默」跳 `/rules` |
 | 告警历史 | `History.vue` 状态筛选 `SILENCED` + 徽标 `st-silenced` | 可查全部被丢弃告警及其报文 |
 | 测试告警 | `Rules.vue` 测试结果列为「已静默丢弃」橙色 Tag | 静默期间测试告警同样被丢弃，不会误发 |
@@ -194,7 +195,7 @@ WARNING / INFO 级别告警不再逐条发送，改为按频率汇总成一个 H
 | 即时生成 | `WarningDigest.vue runOnce` | `POST /pw/alertworker/dp/api/v1/warning-digest/run`（processor `WarningDigestController`） |
 | 网关分流 | `AlertIngestService.ingest`（severity=WARNING/INFO、`ignoreDigest` 未开、且 `WarningDigestGate.enabled()`） | 落 `WARNING_PENDING`、不发 MQ；优先级 静默 > report_only > 汇总 |
 | 规则开关 | `Rules.vue` 编辑弹窗「忽略聚合」+ 表格「忽略聚合」列 | `alert_rule.ignore_digest`；开启后 WARNING/INFO 也立即逐条发送 |
-| 汇总任务 | processor `WarningDigestJobExecutor`（`jobType=WARNING_DIGEST`） | 聚合未认领的 `WARNING_PENDING` 行 → 渲染内置 HTML（`内置-WARNING汇总模板`，含客户端关键字筛选）→ 上传对象存储 → 走 REPORT 派发；收件人 = 各规则联系人合并去重 |
+| 汇总任务 | processor `WarningDigestJobExecutor`（`jobType=WARNING_DIGEST`） | 聚合未认领的 `WARNING_PENDING` 行 → 渲染内置 HTML（`内置-WARNING汇总模板`，含客户端关键字筛选）→ 上传对象存储 → 走 REPORT 派发；收件人 = 各规则联系人合并去重。上下文含 `byRule/bySeverity/byServiceType` + `byAssignee`（每个责任人收到多少条）+ `alerts[].assignees/content`；模板内置搜索框对 `data-search` 做子串匹配，可按责任人筛选 |
 | 认领标记 | `alert_message.digest_message_id` | 与日报的 `report_message_id` 分离，互不干扰；发送失败由 Worker 释放 |
 
 判定要点：**开关关闭 = 现状**（WARNING/INFO 逐条即时发送）。汇总仅在开关开启时生效；`WARNING_PENDING` 行仍可被显式配置的日报统计到（两套管线各自认领，不冲突）。

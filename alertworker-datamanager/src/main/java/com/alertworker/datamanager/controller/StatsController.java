@@ -127,8 +127,11 @@ public class StatsController {
     }
 
     private List<Map<String, Object>> droppedViews(MessageStatus status, int size) {
+        // the dashboard panel says "last 24h" and the matching card count uses the same window — apply it here too
+        // so an old dropped alert can never linger in the list after it has aged out of the count
+        LocalDateTime from = LocalDateTime.now().minusHours(24);
         List<Map<String, Object>> rows = alertMessageMapper.selectDroppedRecent(
-                status.name(), Math.min(Math.max(size, 1), 100));
+                status.name(), from, Math.min(Math.max(size, 1), 100));
         List<Map<String, Object>> result = new ArrayList<>();
         for (Map<String, Object> row : rows) {
             Map<String, Object> view = new HashMap<>(row);

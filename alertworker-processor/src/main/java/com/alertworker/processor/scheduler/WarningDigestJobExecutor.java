@@ -39,9 +39,11 @@ import java.time.ZoneId;
 import java.time.format.DateTimeFormatter;
 import java.util.ArrayList;
 import java.util.HashMap;
+import java.util.HashSet;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.Set;
 
 /**
  * WARNING digest job ({@code jobType = WARNING_DIGEST}).
@@ -240,25 +242,37 @@ public class WarningDigestJobExecutor implements JobExecutor {
         Map<Long, Integer> ruleCounts = new LinkedHashMap<>();
         Map<String, Integer> severityCounts = new LinkedHashMap<>();
         Map<String, Integer> serviceTypeCounts = new LinkedHashMap<>();
+        // #AI-CODE-FUNCTION-dev_release/v0.0.2-20261012: per-responsible-person counts (how many alerts each assignee
+        // receives). Recipient resolution is per rule + service_type, so cache it to avoid re-querying per row.
+        Map<String, Integer> assigneeCounts = new LinkedHashMap<>();
+        Map<String, List<String>> assigneeCache = new HashMap<>();
         List<Map<String, Object>> alerts = new ArrayList<>();
 
         int detailCap = Math.min(rows.size(), MAX_DETAIL_ROWS);
         for (int i = 0; i < rows.size(); i++) {
             AlertMessage row = rows.get(i);
             Long ruleId = row.getAlertRuleId() != null ? row.getAlertRuleId() : 0L;
-            AlertRowExtractor.RowInfo info = alertRowExtractor.extract(row, rulesById.get(ruleId));
+            AlertRule rule = rulesById.get(ruleId);
+            AlertRowExtractor.RowInfo info = alertRowExtractor.extract(row, rule);
             ruleCounts.merge(ruleId, 1, Integer::sum);
             severityCounts.merge(info.severity(), 1, Integer::sum);
             serviceTypeCounts.merge(info.serviceType(), 1, Integer::sum);
+            List<String> assignees = resolveAssigneeNames(rule, info.serviceType(), assigneeCache);
+            for (String assignee : assignees) {
+                assigneeCounts.merge(assignee, 1, Integer::sum);
+            }
             if (i < detailCap) {
                 Map<String, Object> detail = new LinkedHashMap<>();
                 detail.put("messageNo", row.getMessageNo());
-                detail.put("ruleName", ruleName(rulesById.get(ruleId), ruleId));
+                detail.put("ruleName", ruleName(rule, ruleId));
                 detail.put("severity", info.severity());
                 detail.put("serviceType", info.serviceType());
                 detail.put("createdAt", row.getCreatedAt() == null
                         ? null : DateTimeFormatter.ISO_LOCAL_DATE_TIME.format(row.getCreatedAt()));
                 detail.put("summary", info.summary());
+                // #AI-CODE-FUNCTION-dev_release/v0.0.2-20261012: the digest detail shows who owns the alert and its content
+                detail.put("content", info.content());
+                detail.put("assignees", String.join("、", assignees));
                 alerts.add(detail);
             }
         }
@@ -280,8 +294,36 @@ public class WarningDigestJobExecutor implements JobExecutor {
                 .toList());
         context.put("bySeverity", toCountList(severityCounts, "severity"));
         context.put("byServiceType", toCountList(serviceTypeCounts, "serviceType"));
+        context.put("byAssignee", toCountList(assigneeCounts, "assignee"));
         context.put("alerts", alerts);
         return context;
+    }
+
+    /**
+     * Distinct responsible-person (assignee) names for a rule at the given service type, resolved with the same
+     * semantics the gateway uses to pick recipients. {@code cache} is keyed by {@code ruleId|serviceType} because the
+     * resolution hits several tables and the digest commonly has many rows per rule.
+     */
+    private List<String> resolveAssigneeNames(AlertRule rule, String serviceType, Map<String, List<String>> cache) {
+        if (rule == null || rule.getId() == null) {
+            return List.of();
+        }
+        String key = rule.getId() + "|" + serviceType;
+        return cache.computeIfAbsent(key, k -> {
+            List<String> names = new ArrayList<>();
+            Set<String> seen = new HashSet<>();
+            for (AlertRecipient recipient : ruleRecipientResolver.resolve(rule, serviceType)) {
+                String dedupe = recipient.getAssigneeId() != null
+                        ? String.valueOf(recipient.getAssigneeId())
+                        : recipient.getCnName();
+                if (dedupe == null || !seen.add(dedupe)) {
+                    continue;
+                }
+                String name = recipient.getCnName() != null ? recipient.getCnName() : dedupe;
+                names.add(name);
+            }
+            return names;
+        });
     }
 
     private List<Map<String, Object>> toCountList(Map<String, Integer> counts, String key) {

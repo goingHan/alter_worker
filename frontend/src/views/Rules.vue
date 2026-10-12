@@ -22,6 +22,11 @@
           <Option value="PROMETHEUS">Prometheus</Option>
           <Option value="JSON">JSON</Option>
         </Select>
+        <Select v-model="filters.severity" clearable filterable placeholder="告警级别" class="filter-item">
+          <Option value="INFO">INFO</Option>
+          <Option value="WARNING">WARNING</Option>
+          <Option value="CRITICAL">CRITICAL</Option>
+        </Select>
         <!-- #AI-CODE-FUNCTION-dev_release/v0.0.1-20260917: silence filter; gateway drops matched alerts while silenced -->
         <Select v-model="filters.silenced" clearable filterable placeholder="静默状态" class="filter-item">
           <Option value="true">已静默</Option>
@@ -241,7 +246,7 @@
 
 <script setup>
 import { ref, reactive, computed, onMounted } from 'vue'
-import { Modal, Message } from 'view-ui-plus'
+import { Modal, Message, Tag } from 'view-ui-plus'
 import request, { gatewayRequest } from '../api/request.js'
 
 const loading = ref(false)
@@ -257,7 +262,7 @@ const selectedIds = ref([])
 const selectedRows = ref([])
 const groupNamesMap = ref({})
 const channelNamesMap = ref({})
-const filters = reactive({ name: '', alertType: '', silenced: '' })
+const filters = reactive({ name: '', alertType: '', severity: '', silenced: '' })
 
 const linkVisible = ref(false)
 const linkRuleId = ref(null)
@@ -466,6 +471,7 @@ const fetch = async () => {
         size: pageSize.value,
         name: filters.name || undefined,
         alertType: filters.alertType || undefined,
+        severity: filters.severity || undefined,
         silenced: filters.silenced === '' ? undefined : filters.silenced === 'true'
       }
     })
@@ -486,6 +492,7 @@ const search = () => {
 const reset = () => {
   filters.name = ''
   filters.alertType = ''
+  filters.severity = ''
   filters.silenced = ''
   search()
 }
