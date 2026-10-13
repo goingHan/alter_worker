@@ -322,6 +322,21 @@ public class WarningDigestJobExecutor implements JobExecutor {
                 String name = recipient.getCnName() != null ? recipient.getCnName() : dedupe;
                 names.add(name);
             }
+            // #AI-CODE-FUNCTION-dev_release/v0.0.2-20261012: 责任人 = the people who receive this alert. A rule bound only
+            // to a DingDing group robot resolves no named person, so fall back to the channel name(s) instead of leaving the
+            // column blank.
+            if (names.isEmpty()) {
+                ruleRecipientResolver.resolveRuleChannelIds(rule.getId()).values().stream()
+                        .flatMap(List::stream)
+                        .forEach(channelId -> {
+                            MessageChannel channel = messageChannelMapper.selectById(channelId);
+                            String name = channel != null && channel.getName() != null
+                                    ? channel.getName() : String.valueOf(channelId);
+                            if (seen.add("channel:" + channelId)) {
+                                names.add(name);
+                            }
+                        });
+            }
             return names;
         });
     }

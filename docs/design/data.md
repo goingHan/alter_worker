@@ -46,7 +46,7 @@ alert_message ──< dead_letter_message
 
 - **Tool**: Flyway 10.11
 - **Location**: `src/main/resources/db/migration/`
-- **Current**: `V24__warning_digest_assignee_stats.sql`（V24：WARNING 汇总模板增加「按责任人」统计与明细责任人/内容列；V23：修复被 V18 覆盖成 markdown 的内置 HTML 日报模板；V22：`alert_rule.ignore_digest`；V21：WARNING 汇总）
+- **Current**: `V25__warning_digest_mobile_scroll.sql`（V25：WARNING 汇总模板明细表加横向滚动容器，适配手机；V24：WARNING 汇总模板增加「按责任人」统计与明细责任人/内容列；V23：修复被 V18 覆盖成 markdown 的内置 HTML 日报模板；V22：`alert_rule.ignore_digest`）
 - **Note**: All three backend services run Flyway by default. In production, disable on gateway and worker.
 
 ## Jinjava Templates

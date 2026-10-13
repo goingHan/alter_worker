@@ -47,23 +47,35 @@ public class AlertRowExtractor {
                 serviceType = orUnknown(readMapValue(labels, "service_type"));
                 Map<?, ?> annotations = mapField(firstAlert, "annotations");
                 summary = readMapValue(annotations, "summary");
-                content = readMapValue(annotations, "description");
+                content = firstNonBlank(readMapValue(annotations, "description"), summary);
             } else {
                 serviceType = orUnknown(stringValue(payload.get("service_type")));
+                // #AI-CODE-FUNCTION-dev_release/v0.0.2-20261012: the "内容" column shows the alert description, so prefer an
+                // explicit description field before falling back to content/title
                 Object title = payload.get("title");
+                Object description = payload.get("description");
                 Object contentObj = payload.get("content");
-                summary = title != null ? String.valueOf(title) : contentObj != null ? String.valueOf(contentObj) : null;
-                content = contentObj != null ? String.valueOf(contentObj) : summary;
+                summary = title != null ? String.valueOf(title)
+                        : description != null ? String.valueOf(description)
+                        : contentObj != null ? String.valueOf(contentObj) : null;
+                content = firstNonBlank(stringValue(description), stringValue(contentObj), stringValue(title));
             }
         }
         if (summary == null || summary.isBlank()) {
             summary = row.getMessageNo();
         }
         // #AI-CODE-FUNCTION-dev_release/v0.0.2-20261012: fall back to the summary so the digest detail always has text
-        if (content == null || content.isBlank()) {
-            content = summary;
-        }
+        content = firstNonBlank(content, summary);
         return new RowInfo(severity, serviceType, summary, content);
+    }
+
+    private String firstNonBlank(String... values) {
+        for (String value : values) {
+            if (value != null && !value.isBlank()) {
+                return value;
+            }
+        }
+        return null;
     }
 
     private Map<String, Object> parsePayload(String payload) {

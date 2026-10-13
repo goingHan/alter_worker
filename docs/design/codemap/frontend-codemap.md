@@ -195,7 +195,9 @@ WARNING / INFO 级别告警不再逐条发送，改为按频率汇总成一个 H
 | 即时生成 | `WarningDigest.vue runOnce` | `POST /pw/alertworker/dp/api/v1/warning-digest/run`（processor `WarningDigestController`） |
 | 网关分流 | `AlertIngestService.ingest`（severity=WARNING/INFO、`ignoreDigest` 未开、且 `WarningDigestGate.enabled()`） | 落 `WARNING_PENDING`、不发 MQ；优先级 静默 > report_only > 汇总 |
 | 规则开关 | `Rules.vue` 编辑弹窗「忽略聚合」+ 表格「忽略聚合」列 | `alert_rule.ignore_digest`；开启后 WARNING/INFO 也立即逐条发送 |
-| 汇总任务 | processor `WarningDigestJobExecutor`（`jobType=WARNING_DIGEST`） | 聚合未认领的 `WARNING_PENDING` 行 → 渲染内置 HTML（`内置-WARNING汇总模板`，含客户端关键字筛选）→ 上传对象存储 → 走 REPORT 派发；收件人 = 各规则联系人合并去重。上下文含 `byRule/bySeverity/byServiceType` + `byAssignee`（每个责任人收到多少条）+ `alerts[].assignees/content`；模板内置搜索框对 `data-search` 做子串匹配，可按责任人筛选 |
+| 汇总任务 | processor `WarningDigestJobExecutor`（`jobType=WARNING_DIGEST`） | 聚合未认领的 `WARNING_PENDING` 行 → 渲染内置 HTML（`内置-WARNING汇总模板`，含客户端关键字筛选）→ 上传对象存储 → 走 REPORT 派发；收件人 = 各规则联系人合并去重。上下文含 `byRule/bySeverity/byServiceType` + `byAssignee`（每个责任人收到多少条）+ `alerts[].assignees/content`；模板内置搜索框对 `data-search` 做子串匹配，可按责任人筛选；明细表包在 `.table-scroll`（`overflow-x:auto` + `.detail-table{min-width:720px}`）里，手机上可横向滚动 |
+| 汇总明细字段 | `WarningDigestJobExecutor.buildContext` | `content` = 告警描述（Prometheus 取 `annotations.description`、JSON 取 `description/content`，兜底 `summary`/消息号）；`assignees` = 该告警的接收人（规则联系人解析，只绑群渠道时回退为渠道名）；`byAssignee[].assignee/count` = 按责任人统计 |
+| ⚠️ 生效前提 | processor 需用 `15101ba` 及之后的代码重建并重启 | `V24` 迁移由任一含 Flyway 的模块（dm/processor）应用后会更新内置模板，但**填充数据要靠 processor 的新代码**；只更新了模板/未重启 processor 时，内置模板有列但填不上数据 |
 | 认领标记 | `alert_message.digest_message_id` | 与日报的 `report_message_id` 分离，互不干扰；发送失败由 Worker 释放 |
 
 判定要点：**开关关闭 = 现状**（WARNING/INFO 逐条即时发送）。汇总仅在开关开启时生效；`WARNING_PENDING` 行仍可被显式配置的日报统计到（两套管线各自认领，不冲突）。
