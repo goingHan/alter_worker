@@ -193,10 +193,15 @@ html, body {
 
 /* 标签 */
 .ivu-tag { border: none; background: var(--aw-panel-hover); color: var(--aw-text-secondary); }
+/* view-ui-plus 会给已知色值追加 ivu-tag-color-white(!important)，这里让文字继承色块颜色以保证对比度 */
+.ivu-tag .ivu-tag-text { color: inherit !important; }
 .ivu-tag-green { background: rgba(110, 185, 138, 0.16); color: var(--aw-success); }
 .ivu-tag-red { background: rgba(217, 122, 122, 0.16); color: var(--aw-error); }
 .ivu-tag-orange { background: rgba(208, 174, 110, 0.16); color: var(--aw-warning); }
 .ivu-tag-blue { background: rgba(127, 180, 201, 0.16); color: var(--aw-info); }
+.ivu-tag-purple { background: rgba(155, 143, 208, 0.18); color: #9b8fd0; }
+.ivu-tag-cyan { background: rgba(74, 167, 158, 0.18); color: #4aa79e; }
+.ivu-tag-default { background: var(--aw-panel-hover); color: var(--aw-text-secondary); }
 
 /* Tabs */
 .ivu-tabs-bar { border-bottom: 1px solid var(--aw-border); }

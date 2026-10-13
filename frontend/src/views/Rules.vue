@@ -362,7 +362,7 @@ const columns = [
   { title: '告警类型', key: 'alertType', width: 110, render: (h, p) => h('span', {}, alertTypeText(p.row.alertType)) },
   {
     title: '级别', key: 'severity', width: 100, align: 'center',
-    render: (h, p) => h(Tag, { props: { color: severityColor(p.row.severity) } }, () => (p.row.severity || 'WARNING'))
+    render: (h, p) => h(Tag, { color: severityColor(p.row.severity) }, () => (p.row.severity || 'WARNING'))
   },
   { title: '匹配条件', minWidth: 220, render: (h, p) => h('span', { class: 'match-summary' }, matchSummary(p.row)) },
   {
@@ -370,7 +370,7 @@ const columns = [
     key: 'silenced',
     width: 96,
     align: 'center',
-    render: (h, p) => h(Tag, { props: { color: p.row.silenced ? 'orange' : 'default' } }, () => silencedText(p.row))
+    render: (h, p) => h(Tag, { color: p.row.silenced ? 'orange' : 'green' }, () => silencedText(p.row))
   },
   // #AI-CODE-FUNCTION-dev_release/v0.0.1-20261008: report-only rules feed the daily report instead of sending directly
   {
@@ -379,7 +379,7 @@ const columns = [
     width: 80,
     align: 'center',
     render: (h, p) => p.row.reportOnly
-      ? h(Tag, { props: { color: 'purple' } }, () => '日报')
+      ? h(Tag, { color: 'purple' }, () => '日报')
       : h('span', { class: 'assoc-empty' }, '—')
   },
   // #AI-CODE-FUNCTION-dev_release/v0.0.2-20261012: rules that opt out of the WARNING/INFO digest and send immediately
@@ -389,7 +389,7 @@ const columns = [
     width: 96,
     align: 'center',
     render: (h, p) => p.row.ignoreDigest
-      ? h(Tag, { props: { color: 'cyan' } }, () => '忽略')
+      ? h(Tag, { color: 'cyan' }, () => '忽略')
       : h('span', { class: 'assoc-empty' }, '—')
   },
   { title: '关联群组', key: 'groups', minWidth: 160, render: (h, p) => {
@@ -424,12 +424,12 @@ const testResultColumns = [
       // payload that matched no rule) must not be reported as a plain success, otherwise the operator assumes a
       // channel was exercised
       if (p.row.silenced) {
-        return h('Tag', { props: { color: 'orange' } }, () => '已静默丢弃')
+        return h(Tag, { color: 'orange' }, () => '已静默丢弃')
       }
       if (p.row.unmatched) {
-        return h('Tag', { props: { color: 'default' } }, () => '未匹配丢弃')
+        return h(Tag, { color: 'default' }, () => '未匹配丢弃')
       }
-      return h('Tag', { props: { color: p.row.success ? 'green' : 'red' } }, () => (p.row.success ? '已提交' : '失败'))
+      return h(Tag, { color: p.row.success ? 'green' : 'red' }, () => (p.row.success ? '已提交' : '失败'))
     }
   },
   { title: '错误', key: 'error', render: (h, p) => h('span', {}, p.row.error || '—') }

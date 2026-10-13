@@ -200,10 +200,10 @@ const columns = [
         ALERT: ['blue', '告警'],
         TEST: ['orange', '测试'],
         REPORT: ['purple', '日报'],
-        WARNING_DIGEST: ['purple', '汇总']
+        WARNING_DIGEST: ['cyan', '汇总']
       }
       const [color, text] = map[t] || ['default', t || '—']
-      return h(Tag, { props: { color } }, () => text)
+      return h(Tag, { color }, () => text)
     }
   },
   { title: '内容', slot: 'content', minWidth: 600 },
@@ -211,7 +211,7 @@ const columns = [
   {
     title: '级别', key: 'severity', width: 100, align: 'center',
     render: (h, p) => p.row.severity
-      ? h(Tag, { props: { color: severityColor(p.row.severity) } }, () => p.row.severity)
+      ? h(Tag, { color: severityColor(p.row.severity) }, () => p.row.severity)
       : h('span', { class: 'dim' }, '—')
   },
   { title: '规则名', key: 'ruleName', width: 140, render: (h, p) => h('span', {}, p.row.ruleName || '--') },
@@ -231,7 +231,7 @@ const columns = [
         UNMATCHED: ['st-unmatched', '未匹配'],
         // #AI-CODE-FUNCTION-dev_release/v0.0.1-20261008: stored for the daily report instead of being sent
         REPORT_PENDING: ['st-report-pending', '已入库待日报'],
-        WARNING_PENDING: ['st-report-pending', '已入库待汇总']
+        WARNING_PENDING: ['st-warning-pending', '已入库待汇总']
       }
       const [cls, text] = map[s] || ['st-info', s || '--']
       return h('span', { class: 'status-badge ' + cls }, text)
@@ -241,7 +241,7 @@ const columns = [
   {
     title: '死信', key: 'inDeadLetter', width: 80, align: 'center',
     render: (h, params) => params.row.inDeadLetter
-      ? h(Tag, { props: { color: 'orange' } }, () => '是')
+      ? h(Tag, { color: 'orange' }, () => '是')
       : h('span', { class: 'dim' }, '—')
   },
   { title: '重试', key: 'retryCount', width: 70, align: 'center' },
@@ -439,9 +439,11 @@ onMounted(fetch)
 /* #AI-CODE-FUNCTION-dev_release/v0.0.1-20260917: status of an alert dropped by a silenced rule */
 .st-silenced { color: #9b8fd0; background: rgba(155, 143, 208, 0.16); }
 /* #AI-CODE-FUNCTION-dev_release/v0.0.1-20260917: status of an alert dropped because no rule matched */
-.st-unmatched { color: var(--aw-info); background: rgba(127, 180, 201, 0.16); }
+.st-unmatched { color: var(--aw-text-secondary); background: rgba(137, 166, 151, 0.18); }
 /* #AI-CODE-FUNCTION-dev_release/v0.0.1-20261008: stored for the daily report instead of being sent */
 .st-report-pending { color: #9b8fd0; background: rgba(155, 143, 208, 0.16); }
+/* #AI-CODE-FUNCTION-dev_release/v0.0.2-20261012: parked for the warning digest */
+.st-warning-pending { color: #4aa79e; background: rgba(74, 167, 158, 0.18); }
 .st-failed {
   color: #fff;
   background: var(--aw-error);

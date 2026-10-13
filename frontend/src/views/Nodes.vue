@@ -145,22 +145,24 @@ const renderActions = (h, params) => {
   const actions = []
   if (isWorker) {
     actions.push(h(Button, {
-      props: { size: 'small', type: disabled ? 'success' : 'warning' },
-      on: { click: () => toggleStatus(row) }
+      size: 'small',
+      type: disabled ? 'success' : 'warning',
+      onClick: () => toggleStatus(row)
     }, () => disabled ? '启用' : '停用'))
   }
   actions.push(h(Button, {
-    props: { size: 'small' },
-    on: { click: () => openWeight(row) }
+    size: 'small',
+    onClick: () => openWeight(row)
   }, () => '权重'))
   actions.push(h(Button, {
-    props: { size: 'small' },
-    on: { click: () => testNode(row) }
+    size: 'small',
+    onClick: () => testNode(row)
   }, () => '测试'))
   if (!row.available) {
     actions.push(h(Button, {
-      props: { size: 'small', type: 'error' },
-      on: { click: () => removeStale(row) }
+      size: 'small',
+      type: 'error',
+      onClick: () => removeStale(row)
     }, () => '删除'))
   }
   return h('div', { class: 'action-group' }, actions)
@@ -174,7 +176,7 @@ const columns = [
       const t = params.row.nodeType
       const color = t === 'WORKER' ? 'blue' : t === 'PROCESSOR' ? 'purple' : 'green'
       const label = t === 'WORKER' ? 'Worker' : t === 'PROCESSOR' ? 'Processor' : 'Gateway'
-      return h(Tag, { props: { color } }, () => label)
+      return h(Tag, { color }, () => label)
     }
   },
   {
@@ -185,7 +187,7 @@ const columns = [
     title: '状态', key: 'status', width: 110,
     render: (h, params) => {
       const disabled = params.row.status === 'DISABLED'
-      return h(Tag, { props: { color: disabled ? 'red' : 'green' } },
+      return h(Tag, { color: disabled ? 'red' : 'green' },
         () => disabled ? '已停用' : '运行中')
     }
   },
@@ -193,7 +195,7 @@ const columns = [
     title: '可用性', key: 'available', width: 110,
     render: (h, params) => {
       const ok = params.row.available && params.row.status !== 'DISABLED'
-      return h(Tag, { props: { color: ok ? 'green' : 'orange' } },
+      return h(Tag, { color: ok ? 'green' : 'orange' },
         () => ok ? '在线' : (params.row.available ? '已停用' : '离线'))
     }
   },

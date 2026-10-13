@@ -182,7 +182,7 @@ const columns = [
     key: 'enabled',
     width: 80,
     align: 'center',
-    render: (h, p) => h(Tag, { props: { color: p.row.enabled ? 'green' : 'default' } }, () => (p.row.enabled ? '启用' : '停用'))
+    render: (h, p) => h(Tag, { color: p.row.enabled ? 'green' : 'default' }, () => (p.row.enabled ? '启用' : '停用'))
   },
   { title: '创建时间', key: 'createdAt', width: 170,
     render: (h, p) => h('span', {}, fmtTime(p.row.createdAt)) },

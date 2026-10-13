@@ -168,6 +168,7 @@
 
 <script setup>
 import { ref, onMounted, onUnmounted, defineComponent, h, watch } from 'vue'
+import { Tag } from 'view-ui-plus'
 import { useRouter } from 'vue-router'
 import request from '../api/request.js'
 import LineChart from '../components/LineChart.vue'
@@ -224,10 +225,10 @@ const statusTag = (status) => {
     FAILED: { color: 'red', text: '失败' },
     SILENCED: { color: 'orange', text: '已静默' },
     UNMATCHED: { color: 'default', text: '未匹配' },
-    WARNING_PENDING: { color: 'warning', text: '待汇总' }
+    WARNING_PENDING: { color: 'cyan', text: '待汇总' }
   }
   const m = map[status] || { color: 'default', text: status || '-' }
-  return h('Tag', { color: m.color }, () => m.text)
+  return h(Tag, { color: m.color }, () => m.text)
 }
 
 const goRules = () => router.push('/rules')

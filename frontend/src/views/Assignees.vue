@@ -80,7 +80,7 @@ const columns = [
   } },
   {
     title: '状态', key: 'enabled', width: 90, align: 'center',
-    render: (h, p) => h(Tag, { props: { color: p.row.enabled === false ? 'default' : 'green' } }, () => (p.row.enabled === false ? '停用' : '启用'))
+    render: (h, p) => h(Tag, { color: p.row.enabled === false ? 'default' : 'green' }, () => (p.row.enabled === false ? '停用' : '启用'))
   },
   { title: '创建时间', key: 'createdAt', width: 170,
     render: (h, p) => h('span', {}, fmtTime(p.row.createdAt)) },

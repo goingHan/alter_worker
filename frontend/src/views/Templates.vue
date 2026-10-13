@@ -216,7 +216,7 @@ const columns = [
       p.row.name,
       // #AI-CODE-FUNCTION-dev_release/v0.0.2-20261009: builtin templates are system-owned (editable, not deletable)
       p.row.builtin === true
-        ? h(Tag, { props: { color: 'purple' }, style: 'margin-left: 8px' }, () => '内置')
+        ? h(Tag, { color: 'purple', style: 'margin-left: 8px' }, () => '内置')
         : null
     ])
   },
