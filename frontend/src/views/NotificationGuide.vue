@@ -4,10 +4,12 @@
     <Card :bordered="false" class="panel-card">
       <div class="panel-header">
         <span class="panel-title">通知对接</span>
-        <span class="panel-sub">配置值班人员、通信组与钉钉机器人，打通告警通知链路</span>
+        <span class="panel-sub">配置值班人员、通信组、模板与通知渠道，打通告警通知链路</span>
       </div>
       <p class="intro">
-        AlertWorker 按「值班人员 → 通信组 → 告警规则 → 通知渠道」的链路，把告警精准推送到钉钉群或邮件。本页说明如何配置联系人与组，以及如何与钉钉机器人配合使用。
+        AlertWorker 按「值班人员 → 通信组 → 告警规则 → 通知渠道」的链路，把告警精准推送到钉钉群或邮件。
+        规则负责<strong>级别</strong>与匹配、并可开启<strong>静默</strong>、<strong>仅日报</strong>、<strong>忽略聚合</strong>；模板与渠道解耦，在绑定规则时选择。
+        本页说明如何配置联系人与组，以及如何与钉钉机器人、邮件配合使用。
       </p>
     </Card>
 
@@ -15,11 +17,12 @@
       <div class="panel-title">接入步骤</div>
       <ol class="steps">
         <li>在钉钉群中添加「自定义机器人」，复制 <strong>Webhook 地址</strong>；如开启安全校验，同时记下<strong>加签 secret</strong>或<strong>自定义关键词</strong>。</li>
-        <li>在「通知配置 → 通知渠道」新建钉钉渠道，填入 Webhook 地址、加签 secret 与消息类型。</li>
-        <li>在「通知配置 → 值班人员」新建联系人，填写中文姓名、手机号、钉钉用户名。</li>
+        <li>在「通知配置 → 通知渠道」新建渠道（钉钉填 Webhook/secret/消息类型；邮件填发件人/主题/格式）。</li>
+        <li>在「通知配置 → 值班人员」新建联系人，填写中文姓名、手机号、钉钉用户名、邮箱。</li>
+        <li>在「通知配置 → 消息模板」新建模板（模板不绑定渠道，Jinjava 语法）。</li>
         <li>在「通知配置 → 通信组」新建通信组，选择发送类型，并绑定成员（人员 + 渠道 + 服务类型）。</li>
-        <li>在「通知配置 → 告警规则」新建规则，关联该通信组。</li>
-        <li>触发一条告警，即可在钉钉群收到消息，并在「告警历史」中追踪投递状态。</li>
+        <li>在「通知配置 → 告警规则」新建规则：设置级别与匹配条件，关联通信组/值班人员/渠道，并为钉钉、邮件分别绑定模板。</li>
+        <li>触发一条告警，即可在钉钉群/邮件收到消息，并在「告警历史」中追踪投递状态。</li>
       </ol>
     </Card>
 
@@ -29,6 +32,8 @@
         <div class="kv-row"><span class="kv-key">中文姓名</span><code class="kv-val">cnName（必填）</code><span class="kv-desc">用于成员列表和告警记录中标识接收人</span></div>
         <div class="kv-row"><span class="kv-key">手机号</span><code class="kv-val">phone（选填）</code><span class="kv-desc">钉钉 @ 人的依据，需与钉钉账号绑定且已加入机器人所在群</span></div>
         <div class="kv-row"><span class="kv-key">钉钉用户名</span><code class="kv-val">dingdingUsername（选填）</code><span class="kv-desc">随消息进入 @ 列表；钉钉仅识别内部 userid，@ 人请以手机号为准</span></div>
+        <div class="kv-row"><span class="kv-key">邮箱</span><code class="kv-val">email（选填）</code><span class="kv-desc">邮件渠道的收件地址；留空时回退使用手机号</span></div>
+        <div class="kv-row"><span class="kv-key">启用</span><code class="kv-val">enabled</code><span class="kv-desc">停用后该人员不再作为接收人</span></div>
       </div>
     </Card>
 
@@ -44,6 +49,7 @@
           </ul>
         </li>
         <li>同一人员可多次绑定，分别使用不同渠道或服务类型。</li>
+        <li>规则除了关联通信组，也可直接关联值班人员（批量管理）；两者会合并去重后投递。</li>
       </ul>
     </Card>
 
@@ -55,6 +61,40 @@
         <li>成员未配置「服务类型」→ 该成员始终接收。</li>
         <li>其余情况：成员配置的「服务类型」（逗号分隔）包含告警的 <code>service_type</code> 时才接收。</li>
         <li><code>service_type</code> 来源：Prometheus 告警取 label <code>service_type</code>；JSON 告警取 <code>service_type</code> 字段。</li>
+      </ul>
+    </Card>
+
+    <Card :bordered="false" class="panel-card">
+      <div class="panel-title">消息模板（渠道无关）</div>
+      <ul class="notes">
+        <li>模板使用 <strong>Jinjava</strong> 语法，不绑定渠道；发送渠道由规则绑定模板时指定（钉钉 / 邮件）。</li>
+        <li>规则可为钉钉、邮件各绑定一个模板；未绑定时回落到渠道默认模板，再回落到全局默认模板。</li>
+        <li>常用变量：<code v-pre>{{ labels.alertname }}</code>、<code v-pre>{{ annotations.summary }}</code>（Prometheus）；JSON 直接取顶层字段；接收人相关可用 <code v-pre>{{ recipient.cnName }}</code>。</li>
+        <li>命中规则后 <code>severity</code> 已被规则级别覆盖，模板里可直接用 <code v-pre>{{ severity }}</code>。</li>
+        <li>HTML 格式模板（格式=HTML）用于日报类长文，会渲染成 HTML 页面并上传对象存储。</li>
+      </ul>
+    </Card>
+
+    <Card :bordered="false" class="panel-card">
+      <div class="panel-title">告警规则选项</div>
+      <ul class="notes">
+        <li><strong>级别</strong>：<code>INFO</code> / <code>WARNING</code> / <code>CRITICAL</code>，规则自有级别，覆盖报文里的 <code>severity</code>。</li>
+        <li><strong>匹配条件</strong>：可多条，运算符 且/或/非，自上而下左结合；值留空表示「字段存在即命中」。</li>
+        <li><strong>静默</strong>：开启后命中该规则的告警（含测试告警）在网关直接丢弃，不发送任何渠道。</li>
+        <li><strong>仅日报</strong>：命中告警不立即发送，入库待「告警日报」按天聚合。</li>
+        <li><strong>忽略聚合</strong>：开启后即使级别为 WARNING/INFO 也立即逐条发送，不进入「告警汇总」。</li>
+        <li><strong>关联渠道</strong>：可多选，同类型多条会全部发送；留空走渠道类型默认通道。</li>
+        <li><strong>最大重试 / 退避</strong>：失败重试策略；重试耗尽后进入死信队列，可在「失败消息」查看与重试。</li>
+      </ul>
+    </Card>
+
+    <Card :bordered="false" class="panel-card">
+      <div class="panel-title">告警汇总与告警日报</div>
+      <ul class="notes">
+        <li><strong>告警汇总</strong>（通知配置 → 告警汇总）：开启后，<code>WARNING</code>/<code>INFO</code> 级别告警不再逐条发送，而是入库待汇总，由定时任务聚合成一个 HTML 页面统一推送（收件人取各规则联系人合并去重）。</li>
+        <li>级别为 <code>CRITICAL</code> 的告警始终逐条即时发送；如需某条规则即使 WARNING/INFO 也立即发送，开启该规则的「忽略聚合」。</li>
+        <li><strong>告警日报</strong>（通知配置 → 告警日报）：按 Cron 聚合所选规则当天的告警，生成 HTML 日报后发送。</li>
+        <li><strong>周期测试消息</strong>（通知配置 → 周期测试消息）：按频率自动发送测试消息，用于巡检通知链路是否正常。</li>
       </ul>
     </Card>
 
@@ -92,6 +132,21 @@
     </Card>
 
     <Card :bordered="false" class="panel-card">
+      <div class="panel-title">邮件渠道 configJson 示例</div>
+      <pre class="code-block"><code>{
+  "from": "alert@example.com",
+  "subject": "告警通知",
+  "format": "html"
+}</code></pre>
+      <ul class="notes">
+        <li><code>from</code>：发件人地址（必填）。</li>
+        <li><code>subject</code>：邮件主题，默认「Alert Notification」。</li>
+        <li><code>format</code>：<code>html</code> 或 <code>text</code>；HTML 日报会内嵌渲染。</li>
+        <li>SMTP 服务器（host/port/账号密码）为部署级配置（Nacos / <code>spring.mail</code>），不在渠道 configJson 中填写。</li>
+      </ul>
+    </Card>
+
+    <Card :bordered="false" class="panel-card">
       <div class="panel-title">与钉钉机器人安全设置对应</div>
       <ul class="notes">
         <li><strong>自定义关键词</strong>：机器人的安全设置选「自定义关键词」时，需在 configJson 的 <code>keyword</code> 填入相同关键词；发送时关键词会追加到消息末尾。</li>
@@ -115,7 +170,8 @@
     <Card :bordered="false" class="panel-card">
       <div class="panel-title">常见问题</div>
       <ul class="notes">
-        <li><strong>收不到消息</strong>：先看「告警历史」状态是否为 <code>success</code>；再检查钉钉机器人安全设置是否与 configJson 对应。</li>
+        <li><strong>收不到消息</strong>：先看「告警历史」状态。若为 <code>UNMATCHED</code> 说明没有规则命中；<code>SILENCED</code> 说明规则被静默；<code>WARNING_PENDING</code> 说明被「告警汇总」拦截、等待聚合；<code>success</code> 才是已投递。</li>
+        <li><strong>WARNING/INFO 没有立即收到</strong>：「告警汇总」开启时这类告警会聚合发送；如需立即发送，请在对应规则开启「忽略聚合」。</li>
         <li><strong>提示关键词不匹配</strong>：机器人开了「自定义关键词」，但 configJson 的 <code>keyword</code> 为空或不一致。</li>
         <li><strong>提示签名错误</strong>：机器人开了「加签」，但 configJson 的 <code>secret</code> 缺失或填错。</li>
         <li><strong>成员没收到</strong>：确认通信组发送类型与成员的「服务类型」过滤是否把该成员过滤掉了。</li>
