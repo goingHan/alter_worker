@@ -146,6 +146,11 @@ const REPORT_SAMPLE_CONTEXT = {
     { serviceType: 'core', count: 2 },
     { serviceType: 'db', count: 1 }
   ],
+  // #AI-CODE-FUNCTION-dev_release/v0.0.2-20261012: WARNING 汇总模板还使用 byAssignee（责任人接收条数）
+  byAssignee: [
+    { assignee: '张三', count: 2 },
+    { assignee: '李四', count: 1 }
+  ],
   trends: [
     {
       ruleId: 1,
@@ -183,7 +188,9 @@ const REPORT_SAMPLE_CONTEXT = {
       severity: 'warning',
       serviceType: 'core',
       createdAt: new Date(Date.now() - 30 * 60 * 1000).toISOString().slice(0, 19),
-      summary: 'CPU 使用率过高'
+      summary: 'CPU 使用率过高',
+      content: '实例 web-01 CPU 使用率超过 90%',
+      assignees: '张三、李四'
     },
     {
       messageNo: 'DEMO-20261009-0002',
@@ -191,7 +198,9 @@ const REPORT_SAMPLE_CONTEXT = {
       severity: 'critical',
       serviceType: 'core',
       createdAt: new Date(Date.now() - 15 * 60 * 1000).toISOString().slice(0, 19),
-      summary: '接口错误率超过阈值'
+      summary: '接口错误率超过阈值',
+      content: '订单服务接口错误率 5 分钟内超过 5%',
+      assignees: '张三'
     },
     {
       messageNo: 'DEMO-20261009-0003',
@@ -199,7 +208,9 @@ const REPORT_SAMPLE_CONTEXT = {
       severity: 'warning',
       serviceType: 'db',
       createdAt: new Date(Date.now() - 5 * 60 * 1000).toISOString().slice(0, 19),
-      summary: '磁盘使用率超过 85%'
+      summary: '磁盘使用率超过 85%',
+      content: '数据库 db-02 磁盘使用率达到 88%',
+      assignees: '李四'
     }
   ]
 }
