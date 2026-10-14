@@ -1,15 +1,25 @@
 # AlertWorker Docker Compose 部署工程
 #
-# profiles 说明（按需组合启用）：
-#   db      —— 内置 PostgreSQL（用外部库时不启用）
-#   mq      —— 内置 RabbitMQ（用外部 MQ 时不启用）
-#   nacos   —— 内置 Nacos 配置中心（用外部 Nacos 时不启用）
-#   app     —— 四个后端应用 + nginx（前端静态资源 / API 反向代理）
+# ✅ 一键部署（最基础用法）：内置全套依赖 + 四个后端应用 + nginx
+#     cp .env.example .env   # .env 默认 COMPOSE_PROFILES=db,mq,nacos,app
+#     docker compose up -d
+#   上述命令会拉起 PostgreSQL + RabbitMQ + Nacos + datamanager/gateway/worker/processor + nginx。
 #
-# 内部全套启动：
-#   docker compose --profile db --profile mq --profile nacos --profile app up -d
-# 使用外部数据库 / MQ / Nacos 时（在 .env 中改 DB_JDBC_URL / RABBITMQ_HOST / NACOS_SERVER_ADDR）：
-#   docker compose --profile app up -d
+# profiles 说明（可控组合，按需启用）：
+#   db       —— 内置 PostgreSQL（默认；用外部库/MySQL 时不启用）
+#   mysqldb  —— 内置 MySQL 8（⚠️ 与 db 互斥，二选一；启用它就不要启用 db，并把 DB_JDBC_URL/DB_DRIVER 改为 MySQL）
+#   mq       —— 内置 RabbitMQ（用外部 MQ 时不启用）
+#   nacos    —— 内置 Nacos 配置中心（用外部 Nacos 时不启用）
+#   app      —— 四个后端应用 + nginx（前端静态资源 / API 反向代理）
+#
+# ⚠️ 数据库二选一：db 与 mysqldb 只能启用一个，不会、也不应同时部署两套库。
+#    应用只连接 DB_JDBC_URL 指向的那一个；另一个 profile 未启用时对应容器不会启动。
+#
+# 其它用法（显式指定 profile；或改 .env 里的 COMPOSE_PROFILES）：
+#   全套内置（MySQL）：
+#     docker compose --profile mysqldb --profile mq --profile nacos --profile app up -d
+#   使用外部数据库 / MQ / Nacos（改 .env 的 DB_JDBC_URL / RABBITMQ_HOST / NACOS_SERVER_ADDR，COMPOSE_PROFILES=app）：
+#     docker compose --profile app up -d
 #
 # 需要 Docker Compose v2.20+（depends_on.required 语法）
 
@@ -266,6 +276,10 @@ services:
       postgres:
         condition: service_healthy
         required: false
+      # #AI-CODE-CLASS-multi-db: 只等待「当前启用的内置库」就绪（db 与 mysqldb 二选一，未启用的那个不会启动）
+      mysql:
+        condition: service_healthy
+        required: false
       rabbitmq:
         condition: service_healthy
         required: false
@@ -303,6 +317,10 @@ services:
       postgres:
         condition: service_healthy
         required: false
+      # #AI-CODE-CLASS-multi-db: 只等待「当前启用的内置库」就绪（db 与 mysqldb 二选一，未启用的那个不会启动）
+      mysql:
+        condition: service_healthy
+        required: false
       rabbitmq:
         condition: service_healthy
         required: false
@@ -335,6 +353,10 @@ services:
     networks: [alertworker-net]
     depends_on:
       postgres:
+        condition: service_healthy
+        required: false
+      # #AI-CODE-CLASS-multi-db: 只等待「当前启用的内置库」就绪（db 与 mysqldb 二选一，未启用的那个不会启动）
+      mysql:
         condition: service_healthy
         required: false
       rabbitmq:
@@ -370,6 +392,10 @@ services:
     networks: [alertworker-net]
     depends_on:
       postgres:
+        condition: service_healthy
+        required: false
+      # #AI-CODE-CLASS-multi-db: 只等待「当前启用的内置库」就绪（db 与 mysqldb 二选一，未启用的那个不会启动）
+      mysql:
         condition: service_healthy
         required: false
       rabbitmq:

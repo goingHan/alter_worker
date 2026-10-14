@@ -17,12 +17,13 @@
 | datamanager | 8083 | `/pw/alertworker/dm` | 配置 CRUD API、登录认证 |
 | gateway | 8081 | `/pw/alertworker/gw` | 告警接入（Prometheus/Alertmanager 对接）、死信重试、通道测试 |
 | worker | 8082 | `/pw/alertworker/worker` | MQ 消费、模板渲染、钉钉/邮件投递 |
+| processor | 8084 | `/pw/alertworker/dp` | 数据加工：周期测试消息、告警日报生成、告警汇总手动触发 |
 | PostgreSQL | 5432 | — | 主库（schema 由 datamanager 的 Flyway 自动创建） |
 | MySQL（可选） | 3306 | — | 备选主库（按 JDBC URL 自动识别数据库类型） |
 | RabbitMQ | 5672 / 15672 | — | 消息队列（拓扑由应用自动声明） |
 | Nacos | 8848 | — | 配置中心（**应用启动硬依赖**） |
 
-依赖部署：PostgreSQL / RabbitMQ / Nacos 可复用现有环境（参考根目录 `docker-compose.yml` 或公司已有实例），本文聚焦 AlertWorker 自身。
+依赖部署：PostgreSQL / MySQL / RabbitMQ / Nacos 可复用现有环境（参考同目录 [`compose-start/`](./compose-start/README.md) 的 compose 工程，可一键拉起全套依赖），本文聚焦 AlertWorker 自身。
 
 ---
 
@@ -30,7 +31,7 @@
 
 - JDK 17+（`java -version` 确认）
 - nginx 1.20+
-- 可达的 PostgreSQL / RabbitMQ / Nacos
+- 可达的 PostgreSQL 12+ **或** MySQL 8.0（二选一，按 `spring.datasource.url` 自动识别）、RabbitMQ、Nacos
 - 构建机（可跳过）：JDK 17 + Maven 3.8+、Node.js 18+ + npm
 
 ## 3. 构建产物
@@ -44,6 +45,7 @@ mvn clean package -DskipTests
 #   alertworker-datamanager/target/alertworker-datamanager-1.0.0-SNAPSHOT.jar
 #   alertworker-gateway/target/alertworker-gateway-1.0.0-SNAPSHOT.jar
 #   alertworker-worker/target/alertworker-worker-1.0.0-SNAPSHOT.jar
+#   alertworker-processor/target/alertworker-processor-1.0.0-SNAPSHOT.jar
 
 # 前端
 cd frontend
@@ -73,6 +75,11 @@ npm run build
 │   ├── config/application.yml
 │   ├── logs/
 │   └── start.sh / stop.sh
+├── processor/
+│   ├── alertworker-processor-1.0.0-SNAPSHOT.jar
+│   ├── config/application.yml
+│   ├── logs/
+│   └── start.sh / stop.sh
 └── frontend/
     └── dist/                          # 前端编译产物
 ```
@@ -90,7 +97,7 @@ scp -r frontend/dist user@server:/opt/alertworker/frontend/
 
 ### 5.1 前置：Nacos 共享配置
 
-三个应用启动时都会从 Nacos 拉取 `shared-config.yaml`（数据源 / RabbitMQ / 邮件），拉取失败则无法启动。首次部署需保证 Nacos 中存在该配置：
+四个应用（datamanager / gateway / worker / processor）启动时都会从 Nacos 拉取 `shared-config.yaml`（数据源 / RabbitMQ / 邮件），拉取失败则无法启动。首次部署需保证 Nacos 中存在该配置：
 
 - **方式 A（推荐）**：使用 compose 工程的 `nacos-init` 容器自动发布（见 compose-start README §7），或按其模板 [`compose-start/conf/nacos/shared-config.yaml.template`](./compose-start/conf/nacos/shared-config.yaml.template) 在 Nacos 控制台手工创建（dataId=`shared-config.yaml`，group=`DEFAULT_GROUP`，namespace=你的命名空间，占位符 `@VAR@` 手工替换为真实值）。
 - **方式 B**：不用 Nacos 存业务配置——仍然必须有 Nacos 可达，但数据库/MQ 等全部用环境变量或外置文件覆盖（见 §6，环境变量优先级高于 Nacos 导入）。
@@ -148,12 +155,26 @@ nohup java -jar alertworker-worker-1.0.0-SNAPSHOT.jar \
   > logs/out.log 2>&1 &
 ```
 
+**processor（数据加工：周期测试消息 / 告警日报 / 告警汇总手动触发）：**
+
+```bash
+cd /opt/alertworker/processor
+NACOS_SERVER_ADDR=172.168.1.249:28848 \
+NACOS_NAMESPACE=business_test \
+NACOS_USERNAME=nacos \
+NACOS_PASSWORD=123.com \
+NODE_HOST=<本机对外主机名或IP> \
+SPRING_FLYWAY_ENABLED=false \
+nohup java -jar alertworker-processor-1.0.0-SNAPSHOT.jar \
+  > logs/out.log 2>&1 &
+```
+
 关键环境变量说明：
 
 | 变量 | 说明 |
 |---|---|
 | `NACOS_SERVER_ADDR` / `NACOS_NAMESPACE` / `NACOS_USERNAME` / `NACOS_PASSWORD` | Nacos 连接（namespace 填 **ID**） |
-| `SPRING_FLYWAY_ENABLED=false` | **gateway/worker 必须关闭**，仅 datamanager 执行建表，避免迁移竞争 |
+| `SPRING_FLYWAY_ENABLED=false` | **gateway/worker/processor 必须关闭**，仅 datamanager 执行建表，避免迁移竞争 |
 | `NODE_HOST` | 节点管理页显示的主机名；节点测试接口按 `http://<NODE_HOST>:<port>/<前缀>/...` 探测，务必填可解析地址 |
 | `DATAMANAGER_ADMIN_TOKEN` / `ADMIN_USERNAME` / `ADMIN_PASSWORD` / `ADMIN_AUTH_SECRET` | datamanager 管理端认证（生产必改） |
 | `SPRING_DATASOURCE_URL` / `SPRING_RABBITMQ_HOST` 等 | 覆盖 Nacos 里的同名配置（优先级更高，见 §6） |
@@ -230,6 +251,7 @@ cd "$(dirname "$0")"
 ```yaml
 spring:
   datasource:
+    # PostgreSQL
     url: jdbc:postgresql://172.168.1.238:25432/alertworker
     username: airflow
     password: airflow
@@ -244,6 +266,24 @@ alertworker:
   node:
     host: anmin            # 节点管理页展示的主机名
 ```
+
+**使用 MySQL 时**（把 `url` 换成 MySQL 连接串，并指定驱动）：
+
+```yaml
+spring:
+  datasource:
+    driver-class-name: com.mysql.cj.jdbc.Driver
+    url: jdbc:mysql://172.168.1.238:3306/alertworker?useUnicode=true&characterEncoding=UTF-8&serverTimezone=Asia/Shanghai&useSSL=false&allowPublicKeyRetrieval=true
+    username: alertworker
+    password: alertworker
+```
+
+> **数据库类型切换说明**
+> - 数据库类型完全由 `spring.datasource.url` 前缀决定（`jdbc:postgresql:` / `jdbc:mysql:`），无需改任何代码；
+> - 建表脚本按类型自动选择：Flyway `locations: classpath:db/migration/{vendor}`（`postgresql` / `mysql`）；
+> - PostgreSQL 与 MySQL 驱动、各自 Flyway 方言均已打包进 jar，切换只需改连接串；
+> - **建表只由 datamanager 执行**（gateway/worker/processor 保持 `SPRING_FLYWAY_ENABLED=false`），避免多服务并发迁移；
+> - MySQL 库/表需 `utf8mb4` 字符集（连接串已带 `characterEncoding=UTF-8`；建库建议 `DEFAULT CHARSET=utf8mb4`）。
 
 改配置后需重启对应进程生效（Nacos 共享配置改动有 `refreshEnabled`，gateway/worker 可热生效部分配置）。
 
@@ -262,7 +302,7 @@ alertworker:
 - 页面入口为 `http://<服务器IP>/pw/alertworker/ui/`，根路径 `/` 由 nginx 302 跳转过去；
 - 路由（vue-router）与 401 跳登录均已按 base 处理，部署时零额外配置。
 
-后端 API 为同域相对路径（`/pw/alertworker/dm/api/v1` 与 `/pw/alertworker/gw/api/v1`），必须与后端同域，由 nginx 反向代理打通。
+后端 API 为同域相对路径（`/pw/alertworker/dm/api/v1`、`/pw/alertworker/gw/api/v1`、`/pw/alertworker/dp/api/v1`），必须与后端同域，由 nginx 反向代理打通。
 
 ---
 
@@ -296,6 +336,11 @@ upstream alertworker_gateway {
     # server <第二节点>:8081;
 }
 
+upstream alertworker_processor {
+    server 127.0.0.1:8084;
+    # server <第二节点>:8084;
+}
+
 server {
     listen 80;
     server_name _;
@@ -325,6 +370,13 @@ server {
     # ---------- datamanager：配置 CRUD / 告警历史 ----------
     location /pw/alertworker/dm/ {
         proxy_pass http://alertworker_datamanager;
+        include /etc/nginx/alertworker-proxy-headers.conf;
+        proxy_read_timeout 300s;
+    }
+
+    # ---------- processor：周期任务手动触发（周期测试 / 日报生成 / 告警汇总） ----------
+    location /pw/alertworker/dp/ {
+        proxy_pass http://alertworker_processor;
         include /etc/nginx/alertworker-proxy-headers.conf;
         proxy_read_timeout 300s;
     }
@@ -400,3 +452,8 @@ curl -X POST http://127.0.0.1/pw/alertworker/gw/api/v1/alerts/json \
 | 刷新子页面 404 | alias/try_files 配置缺失 | 保留 §8 中 `location /pw/alertworker/ui/` 的 alias + try_files（history 模式回退） |
 | SSE 断连/收不到实时推送 | 代理缓冲 | 保留 `/dm/api/v1/sse/` 的 `proxy_buffering off`；外层若有 LB 需同样处理 |
 | 节点管理页「测试」失败 | `NODE_HOST` 不可解析 | 填网内可达的 IP/主机名 |
+| **MySQL 连接失败**（Public Key Retrieval / SSL） | MySQL 8 默认 `caching_sha2_password` 认证 | 连接串加 `useSSL=false&allowPublicKeyRetrieval=true`（见 §6） |
+| **MySQL 时间差 8 小时** | JVM/连接时区不一致 | 连接串加 `serverTimezone=Asia/Shanghai`，并保证 JVM `TZ=Asia/Shanghai` |
+| **MySQL 中文乱码** | 库/表非 utf8mb4 | 建库 `DEFAULT CHARSET=utf8mb4`，连接串带 `useUnicode=true&characterEncoding=UTF-8` |
+| **切换数据库后报找不到迁移脚本** | `spring.flyway.locations` 未按类型选择 | 保持 `classpath:db/migration/{vendor}`（默认已如此），并只由 datamanager 执行迁移 |
+| **MySQL 版本过低报错** | 使用了 5.x | 需 **MySQL 8.0**（Flyway `flyway-mysql` 与迁移脚本按 8.0 编写） |

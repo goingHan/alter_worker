@@ -6,6 +6,9 @@
 spring:
   datasource:
     # #AI-CODE-CLASS-multi-db: URL 前缀决定数据库类型（jdbc:postgresql: / jdbc:mysql:）
+    #   PostgreSQL：driver-class-name=org.postgresql.Driver
+    #   MySQL 8   ：driver-class-name=com.mysql.cj.jdbc.Driver
+    #               URL 建议带 useUnicode=true&characterEncoding=UTF-8&serverTimezone=Asia/Shanghai&useSSL=false&allowPublicKeyRetrieval=true
     url: @DB_JDBC_URL@
     username: @DB_USERNAME@
     password: @DB_PASSWORD@

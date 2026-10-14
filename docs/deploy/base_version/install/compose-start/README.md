@@ -1,6 +1,6 @@
 # AlertWorker Docker Compose 部署工程（compose-start）
 
-一套开箱即用的 Docker Compose 部署工程：支持一键拉起 **PostgreSQL + RabbitMQ + Nacos + 三个后端服务 + nginx（前端/API 网关）**，也可切换为使用**外部**数据库 / 消息队列 / 配置中心。内置数据持久化与自动初始化。
+一套开箱即用的 Docker Compose 部署工程：一键拉起 **PostgreSQL（或 MySQL）+ RabbitMQ + Nacos + 四个后端服务（datamanager/gateway/worker/processor）+ nginx（前端/API 网关）**，也可切换为使用**外部**数据库 / 消息队列 / 配置中心。内置数据持久化与自动初始化。默认 `COMPOSE_PROFILES=db,mq,nacos,app`，因此 `docker compose up -d` 即为完整部署。
 
 ---
 
@@ -17,7 +17,8 @@ compose-start/
 │   └── nacos/
 │       └── shared-config.yaml.template  # 共享配置模板（nacos-init 容器按 .env 渲染后自动发布）
 ├── init/
-│   └── db-seed.sql             # 幂等种子数据（默认钉钉模板、示例 API Key）
+│   ├── db-seed.sql             # 幂等种子数据（PostgreSQL：默认钉钉模板、示例 API Key）
+│   └── db-seed.mysql.sql       # 幂等种子数据（MySQL）
 └── docker/
     ├── backend.Dockerfile      # 后端通用镜像（ARG MODULE/PORT 参数化，Maven 多阶段构建）
     └── frontend.Dockerfile     # 前端镜像（Node 构建 dist + nginx 托管）
@@ -33,6 +34,7 @@ compose-start/
 | datamanager | 8083 | `DM_PORT` (8083) | `/pw/alertworker/dm` | 配置 CRUD API（`/pw/alertworker/dm/api/v1/**`） |
 | gateway | 8081 | `GW_PORT` (8081) | `/pw/alertworker/gw` | 告警接入 API（`/pw/alertworker/gw/api/v1/alerts/**`，Prometheus/Alertmanager 对接此服务） |
 | worker | 8082 | `WORKER_PORT` (8082) | `/pw/alertworker/worker` | MQ 消费、模板渲染、钉钉/邮件投递（`/pw/alertworker/worker/api/v1/**`） |
+| processor | 8084 | `PROCESSOR_PORT` (8084) | `/pw/alertworker/dp` | 数据加工：周期测试消息、告警日报生成、告警汇总手动触发（`/pw/alertworker/dp/api/v1/**`） |
 | PostgreSQL | 5432 | `POSTGRES_PORT` | — | 内置主库（与 MySQL 二选一） |
 | MySQL | 3306 | `MYSQL_PORT` | — | 内置主库备选（profile `mysqldb`） |
 | RabbitMQ | 5672 / 15672 | `RABBITMQ_AMQP_PORT` / `RABBITMQ_MGMT_PORT` | — | 消息队列 / 管理控制台 |
@@ -47,6 +49,7 @@ nginx 路由规则：
 | `/pw/alertworker/gw/**`（告警接入、死信重试、通道测试） | upstream `alertworker_gateway` |
 | `/pw/alertworker/dm/api/v1/sse/**`（SSE，关闭缓冲） | upstream `alertworker_datamanager` |
 | `/pw/alertworker/dm/**` | upstream `alertworker_datamanager` |
+| `/pw/alertworker/dp/**`（周期任务手动触发：测试/日报/汇总） | upstream `alertworker_processor` |
 | `/pw/alertworker/ui/**`（管理控制台 SPA） | 前端静态资源（alias dist，history 回退 index.html） |
 | `/` | 302 跳转 `/pw/alertworker/ui/` |
 
@@ -62,7 +65,9 @@ nginx 路由规则：
 
 ## 4. 快速开始
 
-### 4.1 模式一：内部依赖全套（自包含部署）
+### 4.1 模式一：内部依赖全套（自包含部署，一键启动）
+
+`.env.example` 默认 `COMPOSE_PROFILES=db,mq,nacos,app`，因此**无需任何 `--profile` 参数**即可一键拉起全部依赖与业务服务。
 
 ```bash
 cd docs/deploy/compose-start
@@ -71,18 +76,24 @@ cd docs/deploy/compose-start
 cp .env.example .env
 vi .env
 
-# 2. 构建并启动（首次会构建 4 个镜像，耗时较长）
-docker compose --profile db --profile mq --profile nacos --profile app up -d
+# 2. 一键构建并启动（PostgreSQL + RabbitMQ + Nacos + 四个后端 + nginx；首次会构建 4 个镜像，耗时较长）
+docker compose up -d
 
 # 3. 观察就绪状态（全部 healthy/running 即可）
-docker compose --profile db --profile mq --profile nacos --profile app ps
+docker compose ps
 ```
+
+> **切换为内置 MySQL**：把 `.env` 里 `COMPOSE_PROFILES` 的 `db` 改成 `mysqldb`（⚠️ `db` 与 `mysqldb` **二选一**，两者只能保留一个），并把 `DB_JDBC_URL`/`DB_DRIVER` 换成 MySQL 两行（见 `.env.example` 注释），再次 `docker compose up -d` 即可。
+>
+> **改用外部依赖**：从 `COMPOSE_PROFILES` 中删掉对应内置 profile（外部库去掉 `db`/`mysqldb`、外部 MQ 去掉 `mq`、外部 Nacos 去掉 `nacos`），并把地址项（`DB_JDBC_URL` / `RABBITMQ_HOST` / `NACOS_SERVER_ADDR`）指向外部服务。
+>
+> 也可继续用显式参数：`docker compose --profile db --profile mq --profile nacos --profile app up -d`（显式 `--profile` 与 `COMPOSE_PROFILES` 会合并生效）。
 
 启动完成后访问 `http://<主机IP>/pw/alertworker/ui/`（nginx 会把根路径 `/` 302 过去）进入管理控制台。
 
 ### 4.2 模式二：使用外部数据库 / MQ / Nacos
 
-前提：外部 PostgreSQL 已建库（如 `alertworker`，可为空库，schema 由应用自动迁移创建）；外部 Nacos 中允许写入 `shared-config.yaml` 配置。
+前提：外部 PostgreSQL 12+ 或 MySQL 8.0 已建库（如 `alertworker`，可为空库，schema 由应用自动迁移创建）；外部 Nacos 中允许写入 `shared-config.yaml` 配置。使用本模式时把 `.env` 的 `COMPOSE_PROFILES` 设为 `app`（或按需保留 `mq`/`nacos`）。
 
 ```bash
 # 1. 编辑 .env，把地址指向外部服务
@@ -130,7 +141,9 @@ docker compose --profile app up -d
 | `MYSQL_DATABASE` / `MYSQL_USER` / `MYSQL_PASSWORD` / `MYSQL_ROOT_PASSWORD` | `alertworker` | 内置 MySQL 容器初始化参数（外部库忽略） |
 | `MYSQL_PORT` | `3306` | 内置 MySQL 映射到宿主机的端口（外部模式忽略） |
 
-> 切换内置数据库：把 `DB_JDBC_URL` / `DB_DRIVER` 改为 MySQL 两行（见 `.env.example` 注释），并用 `--profile mysqldb` 替代 `--profile db`。应用侧连接串由 `DB_JDBC_URL` 直接提供。
+> 切换内置数据库：把 `DB_JDBC_URL` / `DB_DRIVER` 改为 MySQL 两行（见 `.env.example` 注释），并在 `.env` 把 `COMPOSE_PROFILES` 里的 `db` 换成 `mysqldb`。应用侧连接串由 `DB_JDBC_URL` 直接提供；内置库模式下 `DB_USERNAME`/`DB_PASSWORD` 需与容器初始化参数 `POSTGRES_*`/`MYSQL_*` 一致。
+>
+> 数据库就绪门控：四个应用均 `depends_on` 内置 `postgres` 与 `mysql`（`required: false`），使用哪个内置库就等待哪个 healthy，冷启动不会因数据库未就绪而 Flyway 失败。
 
 ### 5.3 RabbitMQ
 
@@ -185,6 +198,7 @@ docker compose --profile app up -d
 | `DM_PORT` | `8083` | datamanager 直连端口 |
 | `GW_PORT` | `8081` | gateway 直连端口（外部 Prometheus/Alertmanager 对接用） |
 | `WORKER_PORT` | `8082` | worker 直连端口 |
+| `PROCESSOR_PORT` | `8084` | processor 直连端口（周期任务手动触发） |
 
 ---
 
@@ -193,22 +207,25 @@ docker compose --profile app up -d
 | profile | 包含服务 | 用途 |
 |---|---|---|
 | `db` | postgres、db-seed | 内置 PostgreSQL + 其种子数据 |
-| `mysqldb` | mysql、db-seed-mysql | 内置 MySQL + 其种子数据（与 `db` 二选一） |
+| `mysqldb` | mysql、db-seed-mysql | 内置 MySQL + 其种子数据（⚠️ 与 `db` **二选一**，不可同时启用） |
 | `mq` | rabbitmq | 内置消息队列 |
 | `nacos` | nacos、nacos-init | 内置配置中心 + 自动发布共享配置 |
-| `app` | datamanager、gateway、worker、nacos-init、nginx | 后端 + 配置发布 + 前端入口 |
+| `app` | datamanager、gateway、worker、processor、nacos-init、nginx | 后端 + 配置发布 + 前端入口 |
 
+> ⚠️ **数据库二选一**：`db`（PostgreSQL）与 `mysqldb`（MySQL）互斥，`COMPOSE_PROFILES` 里只能出现一个；应用只连接 `DB_JDBC_URL` 指向的那个库，未启用的库容器不会启动（应用既不会、也无需同时连两套库）。
+>
 > `nacos-init` 同时挂载 `nacos` 与 `app` 两个 profile：内置/外部 Nacos 模式下都会执行发布；不希望自动发布时在 `.env` 设 `NACOS_INIT_SKIP=true`。种子容器（`db-seed` / `db-seed-mysql`）分别随 `db` / `mysqldb` 启动；使用外部库时如需种子数据请手动执行对应 SQL。
 
-常用组合：
+常用组合（`COMPOSE_PROFILES` 已设则无需 `--profile`；下表命令为显式写法）：
 
 | 场景 | 命令 |
 |---|---|
+| 一键全套内置（.env 默认 `COMPOSE_PROFILES=db,mq,nacos,app`） | `docker compose up -d` |
 | 全套内置（PostgreSQL） | `docker compose --profile db --profile mq --profile nacos --profile app up -d` |
 | 全套内置（MySQL） | `docker compose --profile mysqldb --profile mq --profile nacos --profile app up -d` |
-| 全外部依赖 | `docker compose --profile app up -d`（先改 `.env` 地址） |
+| 全外部依赖 | `docker compose --profile app up -d`（先改 `.env` 地址，并设 `COMPOSE_PROFILES=app`） |
 | 只缺数据库（用外部库） | `docker compose --profile mq --profile nacos --profile app up -d` |
-| 停止全部 | `docker compose --profile db --profile mq --profile nacos --profile app down` |
+| 停止全部 | `docker compose down`（数据卷保留） |
 
 > `down` 时数据卷不会删除；需彻底清空数据见 §8。
 
@@ -223,7 +240,7 @@ docker compose --profile app up -d
 | ① Nacos 配置 | `nacos-init`（一次性容器） | 等待 Nacos 就绪 →（如配置了账号则先登录）→ 将由 `.env` 生成的 `shared-config.yaml`（数据源/Redis 无/RabbitMQ/SMTP）发布到 `NACOS_NAMESPACE` 命名空间，dataId=`shared-config.yaml`。**幂等**：重复执行只覆盖同一份配置 |
 | ② 数据库 schema | datamanager 启动时（Flyway） | 自动执行 `db/migration/{vendor}`（按数据库类型选择 `postgresql` / `mysql`）全部迁移建表；gateway/worker 已关闭 Flyway，避免多服务竞争迁移 |
 | ③ 种子数据 | `db-seed`（PostgreSQL）/ `db-seed-mysql`（MySQL） | 轮询等待表创建完成 → 幂等插入：默认钉钉 markdown 模板（兜底 `is_default=1`）+ 示例 API Key（`SEED_API_KEY`） |
-| ④ MQ 拓扑 | 三个后端应用启动时 | Spring AMQP 自动声明 `alertworker.exchange` / `alertworker.queue` / `alertworker.dlx` / `alertworker.dlq` 及绑定关系 |
+| ④ MQ 拓扑 | 四个后端应用启动时 | Spring AMQP 自动声明 `alertworker.exchange` / `alertworker.queue` / `alertworker.dlx` / `alertworker.dlq` 及绑定关系 |
 
 > 种子 SQL 全部使用 `WHERE NOT EXISTS` / 唯一键守卫，重复执行不会产生重复数据；`docker compose down` 后再 `up` 也不会重复插入。
 
