@@ -1,5 +1,5 @@
 # AlertWorker 前端镜像：Vite 构建静态资源 + nginx 托管与反代
-# 构建上下文为仓库根目录（context: ../../..）。
+# 构建上下文为仓库根目录（context: ../../../../../）。
 #
 # 构建产物：alertworker-frontend:latest
 
@@ -16,8 +16,8 @@ RUN npm run build
 # ---------- 阶段 2：nginx 运行时 ----------
 FROM nginx:1.27-alpine
 
-COPY docs/deploy/compose-start/conf/nginx/default.conf /etc/nginx/conf.d/default.conf
-COPY docs/deploy/compose-start/conf/nginx/proxy-headers.conf /etc/nginx/alertworker-proxy-headers.conf
+COPY docs/deploy/base_version/install/compose-start/conf/nginx/default.conf /etc/nginx/conf.d/default.conf
+COPY docs/deploy/base_version/install/compose-start/conf/nginx/proxy-headers.conf /etc/nginx/alertworker-proxy-headers.conf
 COPY --from=builder /app/dist /usr/share/nginx/html
 
 EXPOSE 80

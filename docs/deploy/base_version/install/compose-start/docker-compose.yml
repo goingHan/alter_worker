@@ -251,8 +251,8 @@ services:
   # ---------- 后端应用 ----------
   datamanager:
     build:
-      context: ../../..
-      dockerfile: docs/deploy/compose-start/docker/backend.Dockerfile
+      context: ../../../../../
+      dockerfile: docs/deploy/base_version/install/compose-start/docker/backend.Dockerfile
       args:
         MODULE: alertworker-datamanager
         PORT: "8083"
@@ -296,8 +296,8 @@ services:
 
   gateway:
     build:
-      context: ../../..
-      dockerfile: docs/deploy/compose-start/docker/backend.Dockerfile
+      context: ../../../../../
+      dockerfile: docs/deploy/base_version/install/compose-start/docker/backend.Dockerfile
       args:
         MODULE: alertworker-gateway
         PORT: "8081"
@@ -334,8 +334,8 @@ services:
 
   worker:
     build:
-      context: ../../..
-      dockerfile: docs/deploy/compose-start/docker/backend.Dockerfile
+      context: ../../../../../
+      dockerfile: docs/deploy/base_version/install/compose-start/docker/backend.Dockerfile
       args:
         MODULE: alertworker-worker
         PORT: "8082"
@@ -370,8 +370,8 @@ services:
   # 数据加工模块：周期测试消息 + 日报生成（HTML 报告渲染并上传对象存储）
   processor:
     build:
-      context: ../../..
-      dockerfile: docs/deploy/compose-start/docker/backend.Dockerfile
+      context: ../../../../../
+      dockerfile: docs/deploy/base_version/install/compose-start/docker/backend.Dockerfile
       args:
         MODULE: alertworker-processor
         PORT: "8084"
@@ -484,8 +484,8 @@ services:
   # ---------- nginx：前端静态资源 + API 反向代理 ----------
   nginx:
     build:
-      context: ../../..
-      dockerfile: docs/deploy/compose-start/docker/frontend.Dockerfile
+      context: ../../../../../
+      dockerfile: docs/deploy/base_version/install/compose-start/docker/frontend.Dockerfile
     image: alertworker-frontend:latest
     container_name: alertworker-nginx
     profiles: ["app"]

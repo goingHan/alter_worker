@@ -1,6 +1,6 @@
 # AlertWorker 后端通用镜像（参数化模块）
 # 由 docker-compose.yml 以 build args 传入 MODULE / PORT，
-# 构建上下文为仓库根目录（context: ../../..）。
+# 构建上下文为仓库根目录（context: ../../../../../）。
 #
 # 构建产物：alertworker-<module>:latest
 

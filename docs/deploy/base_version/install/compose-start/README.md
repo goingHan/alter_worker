@@ -70,7 +70,7 @@ nginx 路由规则：
 `.env.example` 默认 `COMPOSE_PROFILES=db,mq,nacos,app`，因此**无需任何 `--profile` 参数**即可一键拉起全部依赖与业务服务。
 
 ```bash
-cd docs/deploy/compose-start
+cd docs/deploy/base_version/install/compose-start
 
 # 1. 准备配置（生产环境务必修改密码类配置）
 cp .env.example .env
@@ -295,8 +295,9 @@ git pull
 docker compose --profile db --profile mq --profile nacos --profile app build
 docker compose --profile db --profile mq --profile nacos --profile app up -d
 
-# 重新执行种子数据（不会重复插入）
-docker compose --profile app up db-seed
+# 重新执行种子数据（不会重复插入；PostgreSQL 用 db-seed，MySQL 用 db-seed-mysql）
+docker compose --profile db up db-seed
+# docker compose --profile mysqldb up db-seed-mysql
 ```
 
 > 注意：使用 profile 的命令必须始终带 `--profile` 参数，否则 compose 只操作「无 profile」的服务。
