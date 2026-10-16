@@ -3,9 +3,13 @@
 # 构建上下文为仓库根目录（context: ../../../../../）。
 #
 # 构建产物：alertworker-<module>:latest
+#
+# 基础镜像来源：默认走华为云 SWR 的 Docker Hub 代理缓存；
+# 可用 --build-arg BASE_REGISTRY= 覆盖（置空即回退官方 docker.io）
+ARG BASE_REGISTRY=swr.cn-north-4.myhuaweicloud.com/ddn-k8s/docker.io/library/
 
 # ---------- 阶段 1：Maven 构建 ----------
-FROM maven:3.9-eclipse-temurin-17 AS builder
+FROM ${BASE_REGISTRY}maven:3.9-eclipse-temurin-17 AS builder
 WORKDIR /build
 
 ARG MODULE
@@ -24,7 +28,7 @@ COPY . .
 RUN mvn -B clean package -DskipTests -pl ${MODULE} -am
 
 # ---------- 阶段 2：运行时 ----------
-FROM eclipse-temurin:17-jre-alpine
+FROM ${BASE_REGISTRY}eclipse-temurin:17-jre-alpine
 ARG MODULE
 ARG PORT
 WORKDIR /app

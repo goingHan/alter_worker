@@ -254,6 +254,7 @@ services:
       context: ../../../../../
       dockerfile: docs/deploy/base_version/install/compose-start/docker/backend.Dockerfile
       args:
+        BASE_REGISTRY: ${BASE_REGISTRY:-swr.cn-north-4.myhuaweicloud.com/ddn-k8s/docker.io/library/}
         MODULE: alertworker-datamanager
         PORT: "8083"
     image: alertworker-datamanager:latest
@@ -299,6 +300,7 @@ services:
       context: ../../../../../
       dockerfile: docs/deploy/base_version/install/compose-start/docker/backend.Dockerfile
       args:
+        BASE_REGISTRY: ${BASE_REGISTRY:-swr.cn-north-4.myhuaweicloud.com/ddn-k8s/docker.io/library/}
         MODULE: alertworker-gateway
         PORT: "8081"
     image: alertworker-gateway:latest
@@ -337,6 +339,7 @@ services:
       context: ../../../../../
       dockerfile: docs/deploy/base_version/install/compose-start/docker/backend.Dockerfile
       args:
+        BASE_REGISTRY: ${BASE_REGISTRY:-swr.cn-north-4.myhuaweicloud.com/ddn-k8s/docker.io/library/}
         MODULE: alertworker-worker
         PORT: "8082"
     image: alertworker-worker:latest
@@ -373,6 +376,7 @@ services:
       context: ../../../../../
       dockerfile: docs/deploy/base_version/install/compose-start/docker/backend.Dockerfile
       args:
+        BASE_REGISTRY: ${BASE_REGISTRY:-swr.cn-north-4.myhuaweicloud.com/ddn-k8s/docker.io/library/}
         MODULE: alertworker-processor
         PORT: "8084"
     image: alertworker-processor:latest
@@ -486,6 +490,8 @@ services:
     build:
       context: ../../../../../
       dockerfile: docs/deploy/base_version/install/compose-start/docker/frontend.Dockerfile
+      args:
+        BASE_REGISTRY: ${BASE_REGISTRY:-swr.cn-north-4.myhuaweicloud.com/ddn-k8s/docker.io/library/}
     image: alertworker-frontend:latest
     container_name: alertworker-nginx
     profiles: ["app"]

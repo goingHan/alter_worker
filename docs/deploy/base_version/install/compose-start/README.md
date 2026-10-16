@@ -331,6 +331,7 @@ curl -X POST http://<主机IP>/pw/alertworker/gw/api/v1/alerts/json \
 | 外部 Nacos 上发布配置失败 | 账号无写权限或鉴权信息不符 | 预先手动创建 `shared-config.yaml`（内容见 `conf/nacos/shared-config.yaml.template`，替换占位符），并设 `NACOS_INIT_SKIP=true` 跳过自动发布；应用使用已有配置不受影响 |
 | Flyway 报错「multiple migrations」 | 极少见：外部库曾被旧版本服务并发迁移 | 确认只有 datamanager 开启 Flyway（compose 已默认如此） |
 | SSE 实时推送断连 | 中间代理缓冲/超时 | nginx 已配置 `proxy_buffering off` 与 24h 超时；若另有外层 LB 需同样关闭缓冲 |
+| 构建报 `load metadata ... registry-1.docker.io ... i/o timeout` | 服务器无法直连 Docker Hub（本地已有镜像也仍会解析 tag 元数据） | 默认已改用华为云 SWR 代理缓存；换源改 `.env` 的 `BASE_REGISTRY`（置空即回退官方 docker.io，需可直连） |
 
 ---
 
