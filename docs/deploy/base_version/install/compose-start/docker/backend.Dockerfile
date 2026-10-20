@@ -9,7 +9,7 @@
 ARG BASE_REGISTRY=swr.cn-north-4.myhuaweicloud.com/ddn-k8s/docker.io/library/
 
 # ---------- 阶段 1：Maven 构建 ----------
-FROM ${BASE_REGISTRY}maven:3.9-eclipse-temurin-17 AS builder
+FROM ${BASE_REGISTRY}maven:3-eclipse-temurin-17 AS builder
 WORKDIR /build
 
 ARG MODULE
